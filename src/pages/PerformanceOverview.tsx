@@ -11,11 +11,11 @@ import {
   Building2,
   Calendar,
   MoreVertical,
+  CheckCircle2,
   X as XIcon
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { UserRole } from '../types';
-import { generateAppraisalPDF } from '../lib/exportUtils';
 import { useNotifications } from '../context/NotificationContext';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -53,17 +53,13 @@ export const PerformanceOverview: React.FC = () => {
   const [view, setView] = useState<'table' | 'grid'>('table');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  // No fake timer — loading state will be driven by real API calls when backend is connected
+  const loading = false;
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1200);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleExportPDF = (staff: any) => {
+  const handleExportPDF = async (staff: any) => {
     addNotification('info', 'Report Generation', `Generating performance report for ${staff.name}...`);
-    
     try {
+      const { generateAppraisalPDF } = await import('../lib/exportUtils');
       generateAppraisalPDF({
         userName: staff.name,
         ippisNo: staff.ippis,
@@ -74,11 +70,10 @@ export const PerformanceOverview: React.FC = () => {
         competencyScore: 85,
         opsScore: 90,
         totalScore: staff.annual,
-        grade: staff.grade
+        grade: staff.grade,
       }, `Performance_Report_${staff.name.replace(/\s+/g, '_')}`);
-      
       addNotification('success', 'Report Exported', `${staff.name}'s report is ready.`);
-    } catch (error) {
+    } catch {
       addNotification('error', 'Export Failed', 'Could not generate the report.');
     }
   };
@@ -422,37 +417,3 @@ export const PerformanceOverview: React.FC = () => {
     </div>
   );
 };
-
-const CheckCircle2 = ({ size, className = "" }: { size: number, className?: string }) => (
-  <svg 
-    width={size} 
-    height={size} 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    className={className}
-  >
-    <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
-    <path d="m9 12 2 2 4-4"></path>
-  </svg>
-);
-
-const X = ({ size, className = "" }: { size: number, className?: string }) => (
-  <svg 
-    width={size} 
-    height={size} 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    className={className}
-  >
-    <line x1="18" y1="6" x2="6" y2="18"></line>
-    <line x1="6" y1="6" x2="18" y2="18"></line>
-  </svg>
-);

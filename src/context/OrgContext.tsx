@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { PERFORMANCE_TEMPLATES, PerformanceTemplate, TemplateKRA, TemplateObjective, TemplateKPI } from '../lib/performanceTemplates';
 
 export interface Department {
@@ -38,7 +38,19 @@ const load = <T,>(key: string, fallback: T): T => {
   try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : fallback; }
   catch { return fallback; }
 };
-const save = (key: string, val: unknown) => localStorage.setItem(key, JSON.stringify(val));
+
+// Async write — yields to main thread, catches QuotaExceededError.
+const save = (key: string, val: unknown) => {
+  setTimeout(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(val));
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+        console.warn(`[OrgContext] localStorage quota exceeded for key "${key}" — held in memory only.`);
+      }
+    }
+  }, 0);
+};
 
 export const OrgProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [departments, setDepartments] = useState<Department[]>(() => load(DEPT_KEY, INITIAL_DEPTS));
@@ -67,8 +79,17 @@ export const OrgProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTemplates(prev => { const next = prev.filter(t => t.id !== id); save(TMPL_KEY, next); return next; });
   }, []);
 
+  const value = useMemo(() => ({
+    departments,
+    templates,
+    addDepartment,
+    addTemplate,
+    updateTemplate,
+    deleteTemplate,
+  }), [departments, templates, addDepartment, addTemplate, updateTemplate, deleteTemplate]);
+
   return (
-    <OrgContext.Provider value={{ departments, templates, addDepartment, addTemplate, updateTemplate, deleteTemplate }}>
+    <OrgContext.Provider value={value}>
       {children}
     </OrgContext.Provider>
   );

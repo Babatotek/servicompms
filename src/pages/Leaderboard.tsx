@@ -41,12 +41,8 @@ const GRADE_VARIANTS: Record<string, any> = {
 
 export const Leaderboard: React.FC = () => {
   const { user } = useAuth();
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1300);
-    return () => clearTimeout(timer);
-  }, []);
+  // No fake timer — loading state will be driven by real API calls when backend is connected
+  const loading = false;
 
   return (
     <div className="space-y-4 max-w-[1400px] mx-auto pb-8">

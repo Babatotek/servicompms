@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNotifications } from '../context/NotificationContext';
-import { generateAppraisalPDF } from '../lib/exportUtils';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -33,25 +32,25 @@ export const Reports: React.FC = () => {
   const { addNotification } = useNotifications();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('All');
-  const [loading, setLoading] = useState(true);
+  // No fake timer — loading state will be driven by real API calls when backend is connected
+  const loading = false;
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1100);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleDownload = (report: any) => {
-    addNotification(`Downloading ${report.name}...`, 'info');
-    // Simulate generation/download
-    generateAppraisalPDF({
-       name: report.author,
-       ippis: report.id,
-       department: report.department,
-       designation: report.type,
-       score: 85,
-       status: 'Archived',
-       lastUpdated: report.date
-    }, report.name.replace(/\s+/g, '_'));
+  const handleDownload = async (report: any) => {
+    addNotification('info', 'Generating Report', `Preparing ${report.name}...`);
+    try {
+      const { generateAppraisalPDF } = await import('../lib/exportUtils');
+      generateAppraisalPDF({
+        name: report.author,
+        ippis: report.id,
+        department: report.department,
+        designation: report.type,
+        score: 85,
+        status: 'Archived',
+        lastUpdated: report.date,
+      }, report.name.replace(/\s+/g, '_'));
+    } catch {
+      addNotification('error', 'Export Failed', 'Could not generate the report.');
+    }
   };
 
   const filteredReports = MOCK_REPORTS.filter(report => {

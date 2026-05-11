@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, AlertCircle, Info, X, Bell, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -58,10 +58,19 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setToasts([]);
   }, []);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+
+  const value = useMemo(() => ({
+    notifications,
+    addNotification,
+    markAsRead,
+    removeNotification,
+    clearAll,
+    unreadCount,
+  }), [notifications, addNotification, markAsRead, removeNotification, clearAll, unreadCount]);
 
   return (
-    <NotificationContext.Provider value={{ notifications, addNotification, markAsRead, removeNotification, clearAll, unreadCount }}>
+    <NotificationContext.Provider value={value}>
       {children}
 
       {/* Toast tray — bottom-right */}

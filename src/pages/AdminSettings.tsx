@@ -106,16 +106,10 @@ export const AdminSettings: React.FC = () => {
   const [userSubTab, setUserSubTab] = useState<'staff' | 'depts'>('staff');
   const [saved, setSaved] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [showDeptModal, setShowDeptModal] = useState(false);
   const [showTemplateBuilder, setShowTemplateBuilder] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<PerformanceTemplate | undefined>();
-
-  React.useEffect(() => {
-    setLoading(true);
-    const t = setTimeout(() => setLoading(false), 800);
-    return () => clearTimeout(t);
-  }, [activeTab, userSubTab]);
 
   const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2500); };
 

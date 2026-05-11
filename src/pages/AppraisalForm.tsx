@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNotifications } from '../context/NotificationContext';
-import { generateAppraisalPDF } from '../lib/exportUtils';
 import { 
   ChevronRight, 
   ChevronLeft, 
@@ -53,7 +52,13 @@ function useSignature(ippisNo: string) {
 
   const save = useCallback((dataUrl: string) => {
     setSigDataUrl(dataUrl);
-    try { localStorage.setItem(SIG_KEY(ippisNo), dataUrl); } catch {}
+    try {
+      localStorage.setItem(SIG_KEY(ippisNo), dataUrl);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+        console.warn('[useSignature] localStorage quota exceeded — signature held in memory only.');
+      }
+    }
   }, [ippisNo]);
 
   const clear = useCallback(() => {
@@ -103,7 +108,8 @@ export const AppraisalForm: React.FC = () => {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0);
-        saveSig(canvas.toDataURL('image/png'));
+        // JPEG at 0.7 quality is ~5-10x smaller than PNG for signatures
+        saveSig(canvas.toDataURL('image/jpeg', 0.7));
         addNotification('success', 'Signature Saved', 'Your signature has been saved and will be used for all future appraisals.');
       };
       img.src = src;
@@ -476,11 +482,16 @@ export const AppraisalForm: React.FC = () => {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const finalScore = isSupervisorView ? supervisorScores.grandTotal : appraiseeScores.grandTotal;
     const fileName = `Appraisal_${employeeInfo.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`;
-    generateAppraisalPDF({ ...currentStaffData, score: finalScore }, fileName);
-    addNotification('Generating PDF report...', 'info');
+    addNotification('info', 'Generating PDF', 'Preparing your appraisal report...');
+    try {
+      const { generateAppraisalPDF } = await import('../lib/exportUtils');
+      generateAppraisalPDF({ ...currentStaffData, score: finalScore }, fileName);
+    } catch {
+      addNotification('error', 'Export Failed', 'Could not generate the PDF report.');
+    }
   };
 
   const appraiseeScores = useMemo(() => calculateScores(achievements), [achievements, kpiConfigs, kriWeights, compWeights, competencyData]);

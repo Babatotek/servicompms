@@ -21,12 +21,8 @@ export const TeamReview: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [supervisorComment, setSupervisorComment] = useState('');
   const [supervisorRating, setSupervisorRating] = useState(0);
-  const [loading, setLoading] = useState(true);
-
-  React.useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1200);
-    return () => clearTimeout(timer);
-  }, []);
+  // No fake timer — loading state will be driven by real API calls when backend is connected
+  const loading = false;
 
   const allAppraisals = getAppraisalsForSupervisor(user?.id ?? '');
   const pendingAppraisals = allAppraisals.filter(a =>

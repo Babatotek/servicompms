@@ -156,12 +156,8 @@ const ProgressBar: React.FC<{
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1500);
-    return () => clearTimeout(timer);
-  }, []);
+  // No fake timer — loading state will be driven by real API calls when backend is connected
+  const loading = false;
   
   const isSupervisor = user && [
     UserRole.TEAM_LEAD, 

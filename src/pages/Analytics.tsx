@@ -22,13 +22,13 @@ import {
   Target, 
   Award, 
   Activity,
+  AlertCircle,
   Calendar,
   ChevronDown,
   Filter,
   Download
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { exportToExcel, exportToPDF } from '../lib/exportUtils';
 import { useNotifications } from '../context/NotificationContext';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -82,22 +82,18 @@ const StatBadge: React.FC<{ label: string; value: string; color: string; loading
 export const Analytics: React.FC = () => {
   const { addNotification } = useNotifications();
   const [isExporting, setIsExporting] = React.useState(false);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1200);
-    return () => clearTimeout(timer);
-  }, []);
+  // No fake timer — loading state will be driven by real API calls when backend is connected
+  const loading = false;
 
   const handleExport = async (format: 'pdf' | 'excel') => {
     setIsExporting(true);
     addNotification('info', 'Export Started', `Preparing your ${format.toUpperCase()} analysis report...`);
-    
     try {
+      const { exportToExcel, exportToPDF } = await import('../lib/exportUtils');
       if (format === 'excel') {
         const data = [
           ...SCORE_HISTORY.map(s => ({ Type: 'Score Trajectory', Period: s.period, Value: s.score })),
-          ...KRA_ACHIEVEMENT.map(k => ({ Type: 'KRA Achievement', Area: k.name, Score: k.score, Weight: k.weight }))
+          ...KRA_ACHIEVEMENT.map(k => ({ Type: 'KRA Achievement', Area: k.name, Score: k.score, Weight: k.weight })),
         ];
         exportToExcel(data, 'servicom_analytics_report');
       } else {
@@ -293,7 +289,7 @@ export const Analytics: React.FC = () => {
                  {[
                    { icon: <Activity className="text-green-400" size={16} />, text: 'Score is trending upwards by 12% compared to Q4 2025.' },
                    { icon: <Target className="text-indigo-400" size={16} />, text: 'Exceptional performance in Governance & Service Delivery (92%).' },
-                   { icon: <AlertCircleIcon className="text-amber-400" size={16} />, text: 'Improvement suggested for Policy Management competencies.' },
+                   { icon: <AlertCircle className="text-amber-400" size={16} />, text: 'Improvement suggested for Policy Management competencies.' },
                  ].map((insight, i) => (
                    <div key={i} className="flex gap-3.5 p-4 rounded-2xl bg-white/5 border border-white/10 items-start">
                       <div className="mt-0.5">{insight.icon}</div>
@@ -317,21 +313,3 @@ export const Analytics: React.FC = () => {
     </div>
   );
 };
-
-const AlertCircleIcon = ({ size, className }: { size: number; className?: string }) => (
-  <svg 
-    width={size} 
-    height={size} 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2.5" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    className={className}
-  >
-    <circle cx="12" cy="12" r="10" />
-    <line x1="12" y1="8" x2="12" y2="12" />
-    <line x1="12" y1="16" x2="12.01" y2="16" />
-  </svg>
-);

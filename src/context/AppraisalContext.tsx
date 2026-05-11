@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { AppraisalStatus } from '../types';
 import { TemplateKRA } from '../lib/performanceTemplates';
 
@@ -65,8 +65,19 @@ const loadFromStorage = (): AppraisalRecord[] => {
   }
 };
 
+// Async write — yields to the main thread before serialising so it never
+// blocks a user interaction. Catches QuotaExceededError silently; the
+// in-memory state is always the source of truth until the backend is wired.
 const saveToStorage = (records: AppraisalRecord[]) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  setTimeout(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+        console.warn('[AppraisalContext] localStorage quota exceeded — data held in memory only until backend is connected.');
+      }
+    }
+  }, 0);
 };
 
 export const AppraisalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -111,14 +122,16 @@ export const AppraisalProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return appraisals.find(a => a.userId === userId && a.period === period);
   }, [appraisals]);
 
+  const value = useMemo(() => ({
+    appraisals,
+    submitAppraisal,
+    updateAppraisalStatus,
+    getAppraisalsForSupervisor,
+    getAppraisalByUser,
+  }), [appraisals, submitAppraisal, updateAppraisalStatus, getAppraisalsForSupervisor, getAppraisalByUser]);
+
   return (
-    <AppraisalContext.Provider value={{
-      appraisals,
-      submitAppraisal,
-      updateAppraisalStatus,
-      getAppraisalsForSupervisor,
-      getAppraisalByUser,
-    }}>
+    <AppraisalContext.Provider value={value}>
       {children}
     </AppraisalContext.Provider>
   );
