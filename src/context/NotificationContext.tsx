@@ -12,15 +12,22 @@ export interface Notification {
   message: string;
   timestamp: Date;
   read: boolean;
+  // Optional — when set, only shown to the matching userId
+  recipientId?: string;
 }
 
 interface NotificationContextType {
   notifications: Notification[];
+  // addNotification — for the current user (no targeting needed)
   addNotification: (type: NotificationType, title: string, message: string) => void;
+  // notifyUser — sends to a specific userId; only visible when that user is logged in
+  notifyUser: (recipientId: string, type: NotificationType, title: string, message: string) => void;
   markAsRead: (id: string) => void;
   removeNotification: (id: string) => void;
   clearAll: () => void;
   unreadCount: number;
+  // Filter notifications for the currently logged-in user
+  getNotificationsForUser: (userId: string) => Notification[];
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -33,15 +40,19 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const addNotification = useCallback((type: NotificationType, title: string, message: string) => {
     const id = Math.random().toString(36).substring(2, 9);
     const n: Notification = { id, type, title, message, timestamp: new Date(), read: false };
-
-    // Add to persistent notification list
     setNotifications(prev => [n, ...prev]);
-
-    // Add to toast tray and auto-dismiss after 5s
     setToasts(prev => [n, ...prev]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 5000);
+  }, []);
+
+  // Targeted notification — stored with recipientId, only shown to that user
+  const notifyUser = useCallback((recipientId: string, type: NotificationType, title: string, message: string) => {
+    const id = Math.random().toString(36).substring(2, 9);
+    const n: Notification = { id, type, title, message, timestamp: new Date(), read: false, recipientId };
+    setNotifications(prev => [n, ...prev]);
+    // Toasts for targeted notifications are suppressed — they surface in the bell
   }, []);
 
   const markAsRead = useCallback((id: string) => {
@@ -60,14 +71,20 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
 
+  const getNotificationsForUser = useCallback((userId: string) => {
+    return notifications.filter(n => !n.recipientId || n.recipientId === userId);
+  }, [notifications]);
+
   const value = useMemo(() => ({
     notifications,
     addNotification,
+    notifyUser,
     markAsRead,
     removeNotification,
     clearAll,
     unreadCount,
-  }), [notifications, addNotification, markAsRead, removeNotification, clearAll, unreadCount]);
+    getNotificationsForUser,
+  }), [notifications, addNotification, notifyUser, markAsRead, removeNotification, clearAll, unreadCount, getNotificationsForUser]);
 
   return (
     <NotificationContext.Provider value={value}>
@@ -129,10 +146,13 @@ export const useNotifications = () => {
 };
 
 // ── Notification Bell + Dropdown (used in Layout header) ─────────────────────
-export const NotificationBell: React.FC = () => {
-  const { notifications, unreadCount, markAsRead, removeNotification, clearAll } = useNotifications();
+export const NotificationBell: React.FC<{ userId: string }> = ({ userId }) => {
+  const { getNotificationsForUser, unreadCount: rawUnread, markAsRead, removeNotification, clearAll } = useNotifications();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  const notifications = getNotificationsForUser(userId);
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   // Close on outside click
   React.useEffect(() => {

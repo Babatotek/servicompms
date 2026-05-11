@@ -82,7 +82,7 @@ const STEPS = [
 
 export const AppraisalForm: React.FC = () => {
   const { user } = useAuth();
-  const { addNotification } = useNotifications();
+  const { addNotification, notifyUser } = useNotifications();
   const { submitAppraisal } = useAppraisals();
   const { templates } = useOrg();
   const { sigDataUrl, save: saveSig, clear: clearSig } = useSignature(user?.ippisNo ?? '');
@@ -477,6 +477,15 @@ export const AppraisalForm: React.FC = () => {
 
       setIsSubmitted(true);
       addNotification('success', 'Appraisal Submitted', `Your ${selectedPeriod.label} appraisal has been submitted to ${supervisorInfo.name}.`);
+      // Notify the supervisor in real-time so their bell lights up immediately
+      if (user?.supervisorId) {
+        notifyUser(
+          user.supervisorId,
+          'info',
+          'New Appraisal Pending Review',
+          `${user.surname} ${user.firstname} has submitted their ${selectedPeriod.label} appraisal for your review.`
+        );
+      }
     } catch (error) {
       addNotification('error', 'Submission Failed', 'An error occurred. Please try again.');
     }

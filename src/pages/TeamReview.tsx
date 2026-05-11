@@ -16,7 +16,7 @@ import { useNotifications } from '../context/NotificationContext';
 export const TeamReview: React.FC = () => {
   const { user } = useAuth();
   const { getAppraisalsForSupervisor, updateAppraisalStatus } = useAppraisals();
-  const { addNotification } = useNotifications();
+  const { addNotification, notifyUser } = useNotifications();
   const [selectedAppraisal, setSelectedAppraisal] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [supervisorComment, setSupervisorComment] = useState('');
@@ -42,6 +42,13 @@ export const TeamReview: React.FC = () => {
     }
     updateAppraisalStatus(appraisalId, AppraisalStatus.APPROVED, supervisorComment, supervisorRating);
     addNotification('success', 'Appraisal Approved', 'Appraisal approved and forwarded to the counter-signing officer.');
+    // Notify the staff member their appraisal was approved
+    notifyUser(
+      selectedAppraisal.userId,
+      'success',
+      'Appraisal Approved',
+      `Your appraisal has been approved by your supervisor. It has been forwarded for counter-signing.`
+    );
     setSelectedAppraisal(null);
     setSupervisorComment('');
     setSupervisorRating(0);
@@ -54,6 +61,13 @@ export const TeamReview: React.FC = () => {
     }
     updateAppraisalStatus(appraisalId, AppraisalStatus.RETURNED, supervisorComment);
     addNotification('info', 'Appraisal Returned', 'The appraisal has been returned to the staff member for revision.');
+    // Notify the staff member their appraisal was returned
+    notifyUser(
+      selectedAppraisal.userId,
+      'warning',
+      'Appraisal Returned for Revision',
+      `Your appraisal has been returned by your supervisor. Please review their comments and resubmit.`
+    );
     setSelectedAppraisal(null);
     setSupervisorComment('');
   };

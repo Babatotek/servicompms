@@ -15,7 +15,6 @@ import {
   X,
   Search,
   Command,
-  HelpCircle,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
@@ -172,10 +171,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
         <div className="p-6">
            <div className="bg-slate-50/80 rounded-[32px] p-2 space-y-1 border border-slate-100">
-              <Link to="/help" className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-900 hover:bg-white rounded-2xl transition-all font-bold text-xs">
-                 <HelpCircle size={18} />
-                 <span>Support Center</span>
-              </Link>
               <button 
                 onClick={signOut}
                 className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all font-bold text-xs"
@@ -264,7 +259,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
           <div className="flex items-center gap-8">
              <div className="flex items-center gap-3">
-                <NotificationBell />
+                <NotificationBell userId={user?.id ?? ''} />
              </div>
 
              <div className="h-10 w-px bg-slate-100" />
