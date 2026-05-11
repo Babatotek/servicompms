@@ -17,6 +17,8 @@ export enum AppraisalStatus {
   SUBMITTED = 'Submitted',
   UNDER_REVIEW = 'Under Review',
   APPROVED = 'Approved',
+  PENDING_COUNTER_SIGN = 'Pending Counter-Sign',
+  COUNTER_SIGNED = 'Counter-Signed',
   RETURNED = 'Returned',
 }
 

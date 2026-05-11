@@ -36,6 +36,9 @@ export interface AppraisalRecord {
   supervisorRating?: number;
   supervisorComment?: string;
   supervisorReviewedAt?: string;
+  // Counter-signer review
+  counterSignerComment?: string;
+  counterSignedAt?: string;
 }
 
 interface AppraisalContextType {
@@ -49,6 +52,10 @@ interface AppraisalContextType {
   ) => void;
   getAppraisalsForSupervisor: (supervisorId: string) => AppraisalRecord[];
   getAppraisalByUser: (userId: string, period: string) => AppraisalRecord | undefined;
+  // Counter-signer queue
+  getAppraisalsForCounterSigner: (counterSignerId: string) => AppraisalRecord[];
+  counterSignAppraisal: (id: string, comment: string) => void;
+  returnFromCounterSigner: (id: string, comment: string) => void;
   // ── derived selectors consumed by Dashboard, Analytics, Leaderboard ──
   getLatestAppraisalForUser: (userId: string) => AppraisalRecord | undefined;
   getScoreTrendForUser: (userId: string) => { name: string; score: number }[];
@@ -113,13 +120,22 @@ export const AppraisalProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     supervisorRating?: number
   ) => {
     setAppraisals(prev => {
-      const next = prev.map(a => a.id === id ? {
-        ...a,
-        status,
-        supervisorComment: supervisorComment ?? a.supervisorComment,
-        supervisorRating: supervisorRating ?? a.supervisorRating,
-        supervisorReviewedAt: new Date().toISOString(),
-      } : a);
+      const next = prev.map(a => {
+        if (a.id !== id) return a;
+        // When supervisor approves and a counter-signer is assigned,
+        // route to PENDING_COUNTER_SIGN instead of APPROVED directly
+        const effectiveStatus =
+          status === AppraisalStatus.APPROVED && a.counterSignerId
+            ? AppraisalStatus.PENDING_COUNTER_SIGN
+            : status;
+        return {
+          ...a,
+          status: effectiveStatus,
+          supervisorComment: supervisorComment ?? a.supervisorComment,
+          supervisorRating: supervisorRating ?? a.supervisorRating,
+          supervisorReviewedAt: new Date().toISOString(),
+        };
+      });
       saveToStorage(next);
       return next;
     });
@@ -132,6 +148,41 @@ export const AppraisalProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const getAppraisalByUser = useCallback((userId: string, period: string) => {
     return appraisals.find(a => a.userId === userId && a.period === period);
   }, [appraisals]);
+
+  // Counter-signer queue: appraisals awaiting counter-sign by this user
+  const getAppraisalsForCounterSigner = useCallback((counterSignerId: string) => {
+    return appraisals.filter(a => a.counterSignerId === counterSignerId &&
+      a.status === AppraisalStatus.PENDING_COUNTER_SIGN
+    );
+  }, [appraisals]);
+
+  // Counter-signer finalises — moves to COUNTER_SIGNED (fully complete)
+  const counterSignAppraisal = useCallback((id: string, comment: string) => {
+    setAppraisals(prev => {
+      const next = prev.map(a => a.id === id ? {
+        ...a,
+        status: AppraisalStatus.COUNTER_SIGNED,
+        counterSignerComment: comment,
+        counterSignedAt: new Date().toISOString(),
+      } : a);
+      saveToStorage(next);
+      return next;
+    });
+  }, []);
+
+  // Counter-signer returns to supervisor for re-review
+  const returnFromCounterSigner = useCallback((id: string, comment: string) => {
+    setAppraisals(prev => {
+      const next = prev.map(a => a.id === id ? {
+        ...a,
+        status: AppraisalStatus.RETURNED,
+        counterSignerComment: comment,
+        counterSignedAt: new Date().toISOString(),
+      } : a);
+      saveToStorage(next);
+      return next;
+    });
+  }, []);
 
   // Most recent approved appraisal for a user
   const getLatestAppraisalForUser = useCallback((userId: string) => {
@@ -196,6 +247,9 @@ export const AppraisalProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     updateAppraisalStatus,
     getAppraisalsForSupervisor,
     getAppraisalByUser,
+    getAppraisalsForCounterSigner,
+    counterSignAppraisal,
+    returnFromCounterSigner,
     getLatestAppraisalForUser,
     getScoreTrendForUser,
     getLeaderboard,
@@ -207,6 +261,9 @@ export const AppraisalProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     updateAppraisalStatus,
     getAppraisalsForSupervisor,
     getAppraisalByUser,
+    getAppraisalsForCounterSigner,
+    counterSignAppraisal,
+    returnFromCounterSigner,
     getLatestAppraisalForUser,
     getScoreTrendForUser,
     getLeaderboard,
