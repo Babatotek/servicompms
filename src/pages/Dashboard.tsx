@@ -133,7 +133,7 @@ export const Dashboard: React.FC = () => {
   const kpiCompletion = useMemo(() => {
     if (!latestAppraisal) return { filled: 0, total: 0 };
     const total = latestAppraisal.kras.flatMap(k => k.objectives.flatMap(o => o.kpis)).length;
-    const filled = Object.values(latestAppraisal.achievements).filter(v => v > 0).length;
+    const filled = Object.values(latestAppraisal.achievements).filter(v => (v as number) > 0).length;
     return { filled, total };
   }, [latestAppraisal]);
 

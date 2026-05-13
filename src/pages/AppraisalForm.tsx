@@ -27,7 +27,8 @@ import {
   ImageIcon,
   Trash2 as TrashIcon,
   Mail,
-  Fingerprint
+  Fingerprint,
+  BarChart3
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Card, CardHeader } from '../components/ui/Card';
@@ -39,6 +40,12 @@ import { useAuth } from '../context/AuthContext';
 import { useAppraisals } from '../context/AppraisalContext';
 import { AppraisalStatus } from '../types';
 import { useOrg } from '../context/OrgContext';
+import { 
+  DEFAULT_COMPETENCIES, 
+  DEFAULT_OPERATIONS_ITEMS, 
+  OPERATIONS_MAX_TOTAL,
+  SECTION_WEIGHTS
+} from '../constants';
 
 // ── Signature persistence hook ────────────────────────────────────────────────
 // Stores the user's signature as a base64 data URL in localStorage keyed by IPPIS.
@@ -270,52 +277,26 @@ export const AppraisalForm: React.FC = () => {
   
   // Gap 6 fix: separate cluster-level weights from item-level weights
   // Cluster weights must sum to 20 (the Section 5 allocation)
+  // Cluster weights derived from DEFAULT_COMPETENCIES (must sum to 20)
   const [clusterWeights, setClusterWeights] = useState<Record<string, number>>({
-    'Generic Competencies': 8,
-    'Functional Competencies': 8,
+    'Generic': 9,
+    'Functional': 7,
     'Ethics & Values': 4,
   });
-  // Item weights must sum to their parent cluster weight
-  const [compWeights, setCompWeights] = useState<Record<string, number>>({
-    'Drive for Results': 4,
-    'Collaborating & Partnering': 2,
-    'Effective Communication': 2,
-    'Policy Management': 3,
-    'Public Relations Management': 3,
-    'Information & Records Management': 2,
-    'Integrity': 2,
-    'Inclusiveness': 1,
-    'Transparency & Accountability': 1,
+  // Item weights derived from DEFAULT_COMPETENCIES targets
+  const [compWeights, setCompWeights] = useState<Record<string, number>>(() => {
+    const weights: Record<string, number> = {};
+    DEFAULT_COMPETENCIES.forEach(cluster => {
+      cluster.items.forEach(item => {
+        weights[item.name] = item.target;
+      });
+    });
+    return weights;
   });
 
   const COMPETENCY_ALLOCATION = 20;
 
-  const competencyData = useMemo(() => [
-    { 
-       cluster: 'Generic Competencies', 
-       items: [
-          { name: 'Drive for Results', target: 4 },
-          { name: 'Collaborating & Partnering', target: 2 },
-          { name: 'Effective Communication', target: 2 }
-       ] 
-    },
-    { 
-       cluster: 'Functional Competencies', 
-       items: [
-          { name: 'Policy Management', target: 2 },
-          { name: 'Public Relations Management', target: 2 },
-          { name: 'Information & Records Management', target: 2 }
-       ] 
-    },
-    { 
-       cluster: 'Ethics & Values', 
-       items: [
-          { name: 'Integrity', target: 2 },
-          { name: 'Inclusiveness', target: 2 },
-          { name: 'Transparency & Accountability', target: 2 }
-       ] 
-    }
-  ], []);
+  const competencyData = useMemo(() => DEFAULT_COMPETENCIES, []);
 
   // Validation: cluster weights must sum to 20
   const totalClusterWeight = useMemo(() => {
@@ -344,62 +325,119 @@ export const AppraisalForm: React.FC = () => {
     return w;
   });
 
-  const calculateScores = (targetAchievements: Record<string, number>) => {
-    /* ... existing calculateScores ... */
-    const kpiItems: Record<string, { raw: number; weighted: number; grade: string; gradedWeight: number }> = {};
-    let kpiTotal = 0;
-    
-    // ... logic same ...
-    const sectionWeightTotal = 70;
-    const maxRaw = 5;
-    const targetGradedSum = sectionWeightTotal / maxRaw; 
+  const parseCriteria = (criteriaVal: string | number): number => {
+    if (typeof criteriaVal === 'number') return criteriaVal;
+    const cleaned = criteriaVal.replace(/[><=]/g, '').trim();
+    return parseFloat(cleaned) || 0;
+  };
 
-    let totalObjWeight = 0;
+  const calculateScores = (targetAchievements: Record<string, number>) => {
+    const kpiItems: Record<string, { raw: number; weighted: number; grade: string; gradedWeight: number }> = {};
+    let section4RawTotal = 0; // Sum out of 100
+
+    // 1. Calculate total weight of all KPIs in Section 4 to determine the normalization scale
+    let totalSection4Weight = 0;
     activeTemplate.kras.forEach(kra => {
       kra.objectives.forEach(obj => {
-        totalObjWeight += kriWeights[obj.id] || 0;
+        obj.kpis.forEach(kpi => {
+          const kpiWt = (kpi as any).weight || (kriWeights[obj.id] / obj.kpis.length) || 0;
+          totalSection4Weight += kpiWt;
+        });
       });
     });
 
+    // 2. Normalization factor to reach 100 points as per Excel "Graded Weight" column
+    const scaleFactor = totalSection4Weight > 0 ? (100 / totalSection4Weight) : 0;
+
     activeTemplate.kras.forEach(kra => {
       kra.objectives.forEach(obj => {
-        const objWeight = kriWeights[obj.id] || 0;
-        const numKpis = obj.kpis.length;
-        const objGradedWeight = (totalObjWeight > 0) ? (objWeight / totalObjWeight) * targetGradedSum : 0;
-        const kpiGradedWeight = numKpis > 0 ? objGradedWeight / numKpis : 0;
-
         obj.kpis.forEach(kpi => {
           const val = targetAchievements[kpi.id] || 0;
           const config = kpiConfigs[kpi.id];
-          if (!config) return; // Guard for sync state
+          if (!config) return; 
+          
           const criteria = config.criteria;
           const direction = config.direction || 'higher';
           
           let grade = 'P';
           let raw = 0;
+
+          // Excel formula: 
+          // IF(P19<N19,50, IF(P19<M19,60, IF(P19<L19,70, IF(P19<K19,80, 
+          // IF(ISNUMBER(J19), IF(P19<J19,IF(P19>=K19,90,80),100), IF(P19=K19,90,100) ))))))
+          // J19=O, K19=E, L19=VG, M19=G, N19=F
           
-          if (direction === 'higher') {
-            if (val >= criteria.O) { grade = 'O'; raw = 5; }
-            else if (val >= criteria.E) { grade = 'E'; raw = 4; }
-            else if (val >= criteria.VG) { grade = 'VG'; raw = 3; }
-            else if (val >= criteria.G) { grade = 'G'; raw = 2; }
-            else if (val >= criteria.F) { grade = 'F'; raw = 1; }
+          const oVal = parseCriteria(criteria.O);
+          const eVal = parseCriteria(criteria.E);
+          const vgVal = parseCriteria(criteria.VG);
+          const gVal = parseCriteria(criteria.G);
+          const fVal = parseCriteria(criteria.F);
+
+          if (!val || val === 0) {
+            grade = 'P';
+            raw = 0;
+          } else if (direction === 'higher') {
+            if (val < fVal) { grade = 'P'; raw = 50; }
+            else if (val < gVal) { grade = 'F'; raw = 60; }
+            else if (val < vgVal) { grade = 'G'; raw = 70; }
+            else if (val < eVal) { grade = 'VG'; raw = 80; }
+            else {
+              // Handle O (Outstanding)
+              if (typeof criteria.O === 'number') {
+                if (val < oVal) {
+                  grade = 'E';
+                  raw = 90;
+                } else {
+                  grade = 'O';
+                  raw = 100;
+                }
+              } else {
+                // If O is not a number (e.g. ">100" or empty), use E as 90/100 threshold
+                if (val === eVal) {
+                  grade = 'E';
+                  raw = 90;
+                } else {
+                  grade = 'O';
+                  raw = 100;
+                }
+              }
+            }
           } else {
-            if (val <= criteria.O) { grade = 'O'; raw = 5; }
-            else if (val <= criteria.E) { grade = 'E'; raw = 4; }
-            else if (val <= criteria.VG) { grade = 'VG'; raw = 3; }
-            else if (val <= criteria.G) { grade = 'G'; raw = 2; }
-            else if (val <= criteria.F) { grade = 'F'; raw = 1; }
+            // Reverse logic for 'lower' direction (e.g. Turnaround Time)
+            if (val > fVal) { grade = 'P'; raw = 50; }
+            else if (val > gVal) { grade = 'F'; raw = 60; }
+            else if (val > vgVal) { grade = 'G'; raw = 70; }
+            else if (val > eVal) { grade = 'VG'; raw = 80; }
+            else {
+              if (typeof criteria.O === 'number') {
+                if (val > oVal) { grade = 'E'; raw = 90; }
+                else { grade = 'O'; raw = 100; }
+              } else {
+                if (val === eVal) { grade = 'E'; raw = 90; }
+                else { grade = 'O'; raw = 100; }
+              }
+            }
           }
           
-          const weighted = raw * kpiGradedWeight;
-          kpiItems[kpi.id] = { raw, weighted, grade, gradedWeight: kpiGradedWeight };
-          kpiTotal += weighted;
+          // Excel logic: Use pre-calculated gradedWeight from template if available,
+          // otherwise fallback to dynamic scaling based on scaleFactor.
+          const kpiWt = (kpi as any).weight || (kriWeights[obj.id] / obj.kpis.length) || 0;
+          const gradedWeight = (kpi as any).gradedWeight || 
+                             ((obj as any).gradedWeight ? ((obj as any).gradedWeight / obj.kpis.length) : (kpiWt * scaleFactor));
+          
+          // Weighted Raw Score = (Graded Weight * Raw Score) / 100
+          const weighted = (gradedWeight * raw) / 100;
+          
+          kpiItems[kpi.id] = { raw, weighted, grade, gradedWeight };
+          section4RawTotal += weighted;
         });
       });
     });
 
-    // Competency Score
+    // Final Section 4 Score is scaled to 70%
+    const kpiTotal = (section4RawTotal / 100) * 70;
+
+    // Competency Score (20%)
     let compTotal = 0;
     competencyData.forEach(cluster => {
       cluster.items.forEach(item => {
@@ -409,24 +447,20 @@ export const AppraisalForm: React.FC = () => {
       });
     });
 
-    // Ops Score
-    const opsItems = [
-      { name: 'Punctuality / Attendance', target: 4 },
-      { name: 'Work Turnaround Time', target: 3 },
-      { name: 'Innovation on the Job', target: 3 },
-      { name: 'Professional Ethics & Integrity', target: 4 },
-    ];
+    // Ops Score (10%)
     let opsPointsTotal = 0;
-    opsItems.forEach(item => {
+    DEFAULT_OPERATIONS_ITEMS.forEach(item => {
       opsPointsTotal += targetAchievements[`op_${item.name}`] || 0;
     });
-    const opsScoreVal = (opsPointsTotal / 20) * 10;
+    const opsScoreVal = (opsPointsTotal / OPERATIONS_MAX_TOTAL) * SECTION_WEIGHTS.operations;
+
+    const grandTotal = kpiTotal + compTotal + opsScoreVal;
 
     return {
       kpi: { items: kpiItems, total: kpiTotal },
       competency: compTotal,
       ops: { points: opsPointsTotal, score: opsScoreVal },
-      grandTotal: kpiTotal + compTotal + opsScoreVal
+      grandTotal: Math.min(100, grandTotal)
     };
   };
 
@@ -543,9 +577,8 @@ export const AppraisalForm: React.FC = () => {
       });
     });
 
-    const opsItems = ['Punctuality / Attendance', 'Work Turnaround Time', 'Innovation on the Job', 'Professional Ethics & Integrity'];
-    opsItems.forEach(name => {
-      newAchievements[`op_${name}`] = 4;
+    DEFAULT_OPERATIONS_ITEMS.forEach(item => {
+      newAchievements[`op_${item.name}`] = item.target;
     });
 
     if (isSupervisorView) {
@@ -875,15 +908,33 @@ export const AppraisalForm: React.FC = () => {
                           </div>
                         ))}
                      </div>
-                     <div className="flex items-center gap-3 relative z-10">
-                        <div className="text-right">
-                           <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Composite Score</p>
-                           <p className="text-2xl font-black text-indigo-400">{currentScores.kpi.total.toFixed(1)}%</p>
+                      <div className="flex items-center gap-6 relative z-10">
+                        {(() => {
+                           let sum = 0;
+                           activeTemplate.kras.forEach(kra => {
+                              kra.objectives.forEach(obj => {
+                                 obj.kpis.forEach(kpi => {
+                                    sum += currentScores.kpi.items[kpi.id]?.weighted || 0;
+                                 });
+                              });
+                           });
+                           return (
+                              <>
+                                 <div className="text-right">
+                                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Raw Total (100%)</p>
+                                     <p className="text-lg font-black text-white">{sum.toFixed(2)}</p>
+                                 </div>
+                                 <div className="text-right">
+                                     <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-0.5">Institutional (70%)</p>
+                                     <p className="text-2xl font-black text-indigo-400">{currentScores.kpi.total.toFixed(2)}%</p>
+                                 </div>
+                              </>
+                           );
+                        })()}
+                        <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+                           <Target size={20} />
                         </div>
-                        <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white">
-                           <Target size={18} />
-                        </div>
-                     </div>
+                      </div>
                      <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/10 rounded-full blur-2xl -mr-16 -mt-16" />
                   </div>
 
@@ -891,8 +942,8 @@ export const AppraisalForm: React.FC = () => {
                      <div key={kra.id} className="space-y-3">
                         <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl flex flex-col sm:flex-row justify-between items-center gap-2">
                            <div className="flex items-center gap-3">
-                              <div className="w-7 h-7 bg-slate-900 rounded-lg flex items-center justify-center text-white font-mono text-xs">
-                                 {kra.serialNo}
+                              <div className="w-12 h-7 bg-slate-900 rounded-lg flex items-center justify-center text-white font-mono text-xs uppercase font-black">
+                                 KRA {kra.serialNo}
                               </div>
                               <h3 className="text-sm font-black text-slate-900 uppercase italic tracking-tight">{kra.name}</h3>
                            </div>
@@ -920,7 +971,11 @@ export const AppraisalForm: React.FC = () => {
                                        Wt: <input type="number" value={kriWeights[obj.id] || 0} onChange={(e) => handleKriWeightChange(obj.id, e.target.value)} disabled={!isAdmin} className={cn("w-8 bg-transparent text-center outline-none border-b border-dashed", isAdmin ? "border-indigo-300 text-indigo-600" : "border-transparent")} />
                                     </div>
                                     <div className="px-2 py-1 bg-indigo-50 rounded-lg text-[9px] font-bold text-indigo-500">
-                                       Graded: {(() => { const firstKpiId = obj.kpis[0]?.id; const kpiScore = currentScores.kpi.items[firstKpiId]; return (kpiScore?.gradedWeight * obj.kpis.length || 0).toFixed(2); })()}
+                                       Obj. Graded Sum: {(() => { 
+                                          let sum = 0;
+                                          obj.kpis.forEach(kpi => sum += currentScores.kpi.items[kpi.id]?.gradedWeight || 0);
+                                          return sum.toFixed(2);
+                                       })()}
                                     </div>
                                  </div>
                               </div>
@@ -934,7 +989,9 @@ export const AppraisalForm: React.FC = () => {
                                           <div className="flex flex-col xl:flex-row gap-4">
                                              <div className="flex-1 space-y-3">
                                                 <div className="flex items-start gap-2">
-                                                   <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0" />
+                                                   <div className="mt-1 w-6 h-4 rounded bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                                                      <span className="text-[8px] font-black text-indigo-600 uppercase tracking-tighter">KPI</span>
+                                                   </div>
                                                    <p className="text-xs font-semibold text-slate-900 leading-normal">{kpi.description}</p>
                                                 </div>
                                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -956,14 +1013,22 @@ export const AppraisalForm: React.FC = () => {
 
                                              <div className="flex items-center gap-4 px-2">
                                                 <div className="text-center">
+                                                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Graded Wt.</p>
+                                                   <p className="text-sm font-black text-slate-500">{currentScore?.gradedWeight.toFixed(2) || '0.00'}</p>
+                                                </div>
+                                                <div className="text-center">
                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Grade</p>
                                                    <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm border", currentScore?.grade === 'O' ? "bg-green-50 text-green-600 border-green-200" : currentScore?.grade === 'P' ? "bg-red-50 text-red-600 border-red-200" : "bg-indigo-50 text-indigo-600 border-indigo-200")}>
                                                       {currentScore?.grade || '—'}
                                                    </div>
                                                 </div>
                                                 <div className="text-center">
-                                                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Weighted</p>
-                                                   <p className="text-lg font-black text-slate-900">{currentScore?.weighted.toFixed(2) || '0.00'}</p>
+                                                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Raw Score</p>
+                                                   <p className="text-lg font-black text-slate-900">{currentScore?.raw || '0'}</p>
+                                                </div>
+                                                <div className="text-center">
+                                                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Weighted Raw Score</p>
+                                                   <p className="text-lg font-black text-indigo-600">{currentScore?.weighted.toFixed(2) || '0.00'}</p>
                                                 </div>
                                              </div>
                                           </div>
@@ -997,7 +1062,7 @@ export const AppraisalForm: React.FC = () => {
                      </div>
                      <div className="relative z-10 text-right">
                         <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-0.5">Score</p>
-                        <span className="text-2xl font-black text-white">{currentScores.competency.toFixed(1)}<span className="text-sm text-indigo-400 ml-0.5">%</span></span>
+                        <span className="text-2xl font-black text-white">{currentScores.competency.toFixed(2)}<span className="text-sm text-indigo-400 ml-0.5">%</span></span>
                      </div>
                   </div>
 
@@ -1046,58 +1111,52 @@ export const AppraisalForm: React.FC = () => {
             )}
 
             {activeStep === 5 && (
-               <motion.div 
-                  key="step-5"
-                  initial={{ opacity: 0, scale: 0.98 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 1.02 }}
-                  transition={{ duration: 0.4 }}
-                  className="p-4 lg:p-6 space-y-4"
-               >
-                  <div className="flex items-center justify-between p-4 bg-amber-50 border border-amber-100 rounded-xl">
-                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600"><Zap size={16} /></div>
-                        <div>
-                           <h3 className="text-sm font-black text-slate-900 italic uppercase tracking-tight">Section 6: Operations & Processes</h3>
-                           <p className="text-[10px] text-slate-500 mt-0.5">Rating adherence to organizational standards.</p>
-                        </div>
-                     </div>
-                     <div className="text-right">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Score</p>
-                        <p className="text-xl font-black text-amber-600">{currentScores.ops.score.toFixed(1)}%</p>
-                     </div>
-                  </div>
+                <motion.div 
+                   key="step-5"
+                   initial={{ opacity: 0, scale: 0.98 }}
+                   animate={{ opacity: 1, scale: 1 }}
+                   exit={{ opacity: 0, scale: 1.02 }}
+                   transition={{ duration: 0.4 }}
+                   className="p-4 lg:p-6 space-y-4"
+                >
+                   <div className="flex items-center justify-between p-4 bg-amber-50 border border-amber-100 rounded-xl">
+                      <div className="flex items-center gap-3">
+                         <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600"><Zap size={16} /></div>
+                         <div>
+                            <h3 className="text-sm font-black text-slate-900 italic uppercase tracking-tight">Section 6: Operations & Processes</h3>
+                            <p className="text-[10px] text-slate-500 mt-0.5">Rating adherence to organizational standards.</p>
+                         </div>
+                      </div>
+                      <div className="text-right">
+                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Score</p>
+                         <p className="text-xl font-black text-amber-600">{currentScores.ops.score.toFixed(2)}%</p>
+                      </div>
+                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                     {[
-                        { name: 'Punctuality / Attendance', target: 4, desc: 'Adherence to official working hours and attendance.', icon: <Calendar size={14} /> },
-                        { name: 'Work Turnaround Time', target: 3, desc: 'Efficiency in completing tasks within deadlines.', icon: <Zap size={14} /> },
-                        { name: 'Innovation on the Job', target: 3, desc: 'Creative solutions and workflow improvements.', icon: <Brain size={14} /> },
-                        { name: 'Professional Ethics & Integrity', target: 4, desc: 'Commitment to transparency and accountability.', icon: <CheckCircle2 size={14} /> },
-                     ].map((item) => (
-                        <div key={item.name} className="bg-white p-4 rounded-xl border border-slate-100 hover:border-indigo-100 transition-all">
-                           <div className="flex items-start justify-between gap-3 mb-3">
-                              <div className="flex items-center gap-2">
-                                 <div className="text-indigo-500 flex-shrink-0">{item.icon}</div>
-                                 <div>
-                                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight">{item.name}</h4>
-                                    <p className="text-[9px] text-slate-400 mt-0.5">{item.desc}</p>
-                                 </div>
-                              </div>
-                              <span className="text-[9px] font-bold text-slate-400 flex-shrink-0">Target: {item.target}</span>
-                           </div>
-                           <div className="flex gap-1.5">
-                              {[1, 2, 3, 4, 5].map((s) => (
-                                 <button key={s} onClick={() => handleAchievementChange(`op_${item.name}`, s.toString())}
-                                    className={cn("flex-1 h-8 rounded-lg font-black text-xs transition-all border", (isSupervisorView ? supervisorAchievements[`op_${item.name}`] : achievements[`op_${item.name}`]) === s ? "bg-slate-900 text-white border-slate-900 shadow-md" : "bg-slate-50 text-slate-400 border-slate-100 hover:border-slate-300 hover:text-slate-900")}>
-                                    {s}
-                                 </button>
-                              ))}
-                           </div>
-                        </div>
-                     ))}
-                  </div>
-               </motion.div>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {DEFAULT_OPERATIONS_ITEMS.map((item) => (
+                         <div key={item.name} className="bg-white p-4 rounded-xl border border-slate-100 hover:border-indigo-100 transition-all">
+                            <div className="flex items-start justify-between gap-3 mb-3">
+                               <div className="flex items-center gap-2">
+                                  <div className="text-indigo-500 flex-shrink-0"><Zap size={14} /></div>
+                                  <div>
+                                     <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight">{item.name}</h4>
+                                     <p className="text-[9px] text-slate-400 mt-0.5">Max Target: {item.target}</p>
+                                  </div>
+                               </div>
+                            </div>
+                            <div className="flex gap-1">
+                               {Array.from({ length: item.max + 1 }).map((_, s) => (
+                                  <button key={s} onClick={() => handleAchievementChange(`op_${item.name}`, s.toString())}
+                                     className={cn("flex-1 h-8 rounded-lg font-black text-xs transition-all border", (isSupervisorView ? supervisorAchievements[`op_${item.name}`] : achievements[`op_${item.name}`]) === s ? "bg-slate-900 text-white border-slate-900 shadow-md" : "bg-slate-50 text-slate-400 border-slate-100 hover:border-slate-300 hover:text-slate-900")}>
+                                     {s}
+                                  </button>
+                               ))}
+                            </div>
+                         </div>
+                      ))}
+                   </div>
+                </motion.div>
             )}
 
             {activeStep === 6 && (
@@ -1187,9 +1246,9 @@ export const AppraisalForm: React.FC = () => {
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                         <div className="space-y-3">
                            {[
-                              { label: 'Section 4: Tasks (70%)', value: currentScores.kpi.total.toFixed(1) },
-                              { label: 'Section 5: Competencies (20%)', value: currentScores.competency.toFixed(1) },
-                              { label: 'Section 6: Operations (10%)', value: currentScores.ops.score.toFixed(1) },
+                              { label: 'Section 4: Tasks (70%)', value: currentScores.kpi.total.toFixed(2) },
+                              { label: 'Section 5: Competencies (20%)', value: currentScores.competency.toFixed(2) },
+                              { label: 'Section 6: Operations (10%)', value: currentScores.ops.score.toFixed(2) },
                            ].map((row) => (
                               <div key={row.label} className="flex justify-between items-center py-2 border-b border-white/10">
                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{row.label}</span>
@@ -1200,11 +1259,11 @@ export const AppraisalForm: React.FC = () => {
                         <div className="bg-white/5 rounded-xl p-6 flex flex-col items-center justify-center gap-2 text-center border border-white/10">
                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Aggregate Score</p>
                            <div className="flex items-baseline gap-1">
-                              <span className="text-5xl font-black tracking-tighter text-white">{currentScores.grandTotal.toFixed(1)}</span>
+                              <span className="text-5xl font-black tracking-tighter text-white">{currentScores.grandTotal.toFixed(2)}</span>
                               <span className="text-lg font-bold text-indigo-400">%</span>
                            </div>
                            <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-green-500/30">
-                              {currentScores.grandTotal >= 90 ? 'Outstanding' : currentScores.grandTotal >= 70 ? 'Excellent' : 'Good'}
+                              {currentScores.grandTotal >= 100 ? 'Outstanding' : currentScores.grandTotal >= 90 ? 'Excellent' : 'Good'}
                            </span>
                         </div>
                      </div>

@@ -136,7 +136,7 @@ export const generateAppraisalPDF = (data: any, fileName: string = 'Appraisal_Re
     body: userInfo,
     theme: 'plain',
     styles: { fontSize: 9, cellPadding: 2 },
-    columnStyles: { 0: { fontStyle: 'bold', width: 40 } }
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 } }
   });
   
   // Summary Scores

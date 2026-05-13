@@ -34,16 +34,26 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  // toasts = notifications that haven't been dismissed from the toast tray yet
   const [toasts, setToasts] = useState<Notification[]>([]);
+  // Tracks recently-fired toast keys (type+title) to suppress duplicates within 2s
+  const recentKeys = useRef<Map<string, number>>(new Map());
 
   const addNotification = useCallback((type: NotificationType, title: string, message: string) => {
+    const dedupeKey = `${type}::${title}`;
+    const now = Date.now();
+    const lastFired = recentKeys.current.get(dedupeKey) ?? 0;
+
+    // Suppress if the same type+title was fired within the last 2 seconds
+    if (now - lastFired < 2000) return;
+    recentKeys.current.set(dedupeKey, now);
+
     const id = Math.random().toString(36).substring(2, 9);
     const n: Notification = { id, type, title, message, timestamp: new Date(), read: false };
     setNotifications(prev => [n, ...prev]);
     setToasts(prev => [n, ...prev]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
+      recentKeys.current.delete(dedupeKey);
     }, 5000);
   }, []);
 

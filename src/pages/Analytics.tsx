@@ -5,15 +5,17 @@ import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis,
   BarChart, Bar, Cell
 } from 'recharts';
-import { TrendingUp, Target, Activity, AlertCircle, Calendar, ChevronDown, Download } from 'lucide-react';
+import { TrendingUp, Target, Activity, AlertCircle, Calendar, ChevronDown, Download, Users } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNotifications } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
 import { useAppraisals } from '../context/AppraisalContext';
+import { useOrg } from '../context/OrgContext';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Skeleton } from '../components/ui/Skeleton';
 import { Badge } from '../components/ui/Badge';
 import { DEFAULT_COMPETENCIES } from '../constants';
+import { UserRole, AppraisalStatus } from '../types';
 
 const StatBadge: React.FC<{ label: string; value: string; color: string; loading?: boolean }> = ({ label, value, color, loading }) => {
   if (loading) return (
@@ -33,10 +35,42 @@ const StatBadge: React.FC<{ label: string; value: string; color: string; loading
 
 export const Analytics: React.FC = () => {
   const { user } = useAuth();
-  const { getScoreTrendForUser, getLatestAppraisalForUser } = useAppraisals();
+  const { getScoreTrendForUser, getLatestAppraisalForUser, appraisals } = useAppraisals();
+  const { departments } = useOrg();
   const { addNotification } = useNotifications();
   const [isExporting, setIsExporting] = React.useState(false);
   const loading = false;
+
+  const isExec = user?.role === UserRole.DEPUTY_DIRECTOR ||
+                 user?.role === UserRole.NC ||
+                 user?.role === UserRole.SUPER_ADMIN;
+
+  // ── Org-wide dept comparison data (exec only) ─────────────────────────────
+  const deptComparisonData = React.useMemo(() => {
+    if (!isExec) return [];
+    const COLORS = ['#16A34A','#2563EB','#7C3AED','#D97706','#EA580C','#DC2626','#0891B2','#7C3AED','#059669','#D97706'];
+    return departments.map((dept, i) => {
+      const deptAppraisals = appraisals.filter(a =>
+        a.departmentId === dept.id && a.scores.grandTotal > 0
+      );
+      const avg = deptAppraisals.length > 0
+        ? Math.round((deptAppraisals.reduce((s, a) => s + a.scores.grandTotal, 0) / deptAppraisals.length) * 10) / 10
+        : 0;
+      return { name: dept.code, score: avg, color: COLORS[i % COLORS.length], count: deptAppraisals.length };
+    }).filter(d => d.count > 0);
+  }, [isExec, departments, appraisals]);
+
+  const orgCompliance = React.useMemo(() => {
+    if (!isExec) return [];
+    return departments.map(dept => {
+      const total = appraisals.filter(a => a.departmentId === dept.id).length;
+      const approved = appraisals.filter(a =>
+        a.departmentId === dept.id &&
+        (a.status === AppraisalStatus.APPROVED || a.status === AppraisalStatus.COUNTER_SIGNED)
+      ).length;
+      return { name: dept.name, code: dept.code, total, approved, pct: total > 0 ? Math.round((approved / total) * 100) : 0 };
+    }).filter(d => d.total > 0);
+  }, [isExec, departments, appraisals]);
 
   const scoreTrend = getScoreTrendForUser(user?.id ?? '');
   const latest = getLatestAppraisalForUser(user?.id ?? '');
@@ -115,7 +149,16 @@ export const Analytics: React.FC = () => {
   return (
     <div className="space-y-5 sm:space-y-8 pb-32" id="analytics-content">
       {/* Toolbar */}
-      <section className="flex justify-end items-center gap-4 no-export">
+      <section className="flex justify-between items-center gap-4 no-export flex-wrap">
+        <div className="flex items-center gap-2">
+          {isExec && (
+            <div className="flex items-center gap-1.5 px-3 py-2 bg-primary-50 border border-primary-100 rounded-xl">
+              <Users size={14} className="text-primary-600" />
+              <span className="text-[10px] font-black text-primary-700 uppercase tracking-widest">Org-Wide View Active</span>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-4">
         <div className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2.5 rounded-xl text-sm font-bold text-slate-600 cursor-pointer hover:bg-slate-50">
           <Calendar size={16} /><span>Full Year 2026</span><ChevronDown size={14} />
         </div>
@@ -130,7 +173,58 @@ export const Analytics: React.FC = () => {
             <button onClick={() => handleExport('excel')} className="w-full text-left px-4 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 rounded-xl transition-all">Download Excel (XLSX)</button>
           </div>
         </div>
+        </div>
       </section>
+
+      {/* Exec Org-Wide Section */}
+      {isExec && deptComparisonData.length > 0 && (
+        <div className="space-y-5">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-4 bg-primary-600 rounded-full" />
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Organisation-Wide Performance</p>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* Dept avg bar chart */}
+            <Card className="p-6 flex flex-col">
+              <CardHeader title="Department Averages" subtitle="Average score per unit" />
+              <div className="h-[260px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={deptComparisonData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 900 }} />
+                    <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 900 }} />
+                    <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)' }} />
+                    <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+                      {deptComparisonData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+
+            {/* Compliance progress bars */}
+            <Card className="p-6 space-y-5">
+              <CardHeader title="Appraisal Compliance" subtitle="Approved appraisals per department" />
+              <div className="space-y-4">
+                {orgCompliance.map(dept => {
+                  const barColor = dept.pct >= 80 ? 'bg-green-600' : dept.pct >= 50 ? 'bg-amber-500' : 'bg-red-500';
+                  return (
+                    <div key={dept.code} className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-black text-slate-700 uppercase italic">{dept.name}</span>
+                        <span className="text-[10px] font-black text-slate-500 font-mono">{dept.approved}/{dept.total}</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div className={cn('h-full rounded-full transition-all duration-700', barColor)} style={{ width: `${dept.pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
 
       {/* Stats Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

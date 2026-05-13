@@ -24,8 +24,10 @@ export enum AppraisalStatus {
 
 export enum ContractStatus {
   DRAFT = 'Draft',
+  PENDING_APPROVAL = 'Pending Approval',
   APPROVED = 'Approved',
   ACTIVE = 'Active',
+  RETURNED = 'Returned',
 }
 
 export interface User {
@@ -50,6 +52,8 @@ export interface Department {
   name: string;
   code: string;
   headUserId?: string;
+  unitWeight: number; // Sheet8 weight (total 50)
+  isActive: boolean;
 }
 
 export interface Team {
@@ -91,6 +95,7 @@ export interface KPI {
   description: string;
   targetValue: number;
   unit: string;
+  direction: 'higher' | 'lower';
   criteria: {
     O: number;
     E: number;
@@ -99,6 +104,60 @@ export interface KPI {
     F: number;
     P: number;
   };
+  mpmsKpiId?: string; // Links individual KPI to MPMS source
+  weight?: number;    // Absolute weight from individual's contract
+  gradedWeight?: number; // Normalized weight out of 100
+}
+
+// ── MPMS (Institutional) Structures ──────────────────────────────────────────
+
+export enum MPMSCategoryCode {
+  PRESIDENTIAL = 'PRESIDENTIAL',
+  MDA_OPERATIONAL = 'MDA_OPERATIONAL',
+  SERVICE_WIDE = 'SERVICE_WIDE',
+}
+
+export interface MPMSCategory {
+  id: string;
+  code: MPMSCategoryCode;
+  name: string;
+  weight: number; // e.g., 13, 25, 37
+}
+
+export interface MPMSKRA {
+  id: string;
+  categoryId: string;
+  serialNo: number;
+  name: string;
+  weight: number;
+}
+
+export interface MPMSObjective {
+  id: string;
+  kraId: string;
+  description: string;
+  weight: number;
+}
+
+export interface MPMSKPI {
+  id: string;
+  objectiveId: string;
+  description: string;
+  annualTarget: number;
+  unitOfMeasurement: string;
+  leadUnitId: string; // Department ID
+  supportUnitIds: string[]; // Department IDs
+  weight?: number; // Added for institutional weighting library
+}
+
+export interface MPMSAchievement {
+  id: string;
+  kpiId: string;
+  year: number;
+  achievementValue: number;
+  status: 'draft' | 'submitted' | 'approved';
+  submittedBy: string;
+  submittedAt: string;
 }
 
 export interface Appraisal {

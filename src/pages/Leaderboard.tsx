@@ -5,27 +5,50 @@ import { cn } from '../lib/utils';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { useAuth } from '../context/AuthContext';
-import { useAppraisals } from '../context/AppraisalContext';
+import { useAppraisals, AppraisalRecord } from '../context/AppraisalContext';
 import { useOrg } from '../context/OrgContext';
 
 const GRADE_VARIANTS: Record<string, string> = {
   O: 'outstanding', E: 'excellent', VG: 'verygood', G: 'good', F: 'fair', P: 'poor',
 };
 
+// Grade-based bar colours per PRD §8.3
+const GRADE_BAR: Record<string, string> = {
+  O: 'bg-green-600', E: 'bg-blue-600', VG: 'bg-purple-600',
+  G: 'bg-amber-500', F: 'bg-orange-500', P: 'bg-red-600',
+};
+
+type LeaderboardTab = 'annual' | 'quarter' | 'department';
+
 export const Leaderboard: React.FC = () => {
   const { user } = useAuth();
-  const { getLeaderboard } = useAppraisals();
+  const { getLeaderboard, appraisals } = useAppraisals();
   const { departments } = useOrg();
   const [search, setSearch] = React.useState('');
+  const [activeTab, setActiveTab] = React.useState<LeaderboardTab>('annual');
 
   const rawBoard = getLeaderboard();
-  const board = rawBoard.filter(e =>
-    search === '' ||
-    e.userName.toLowerCase().includes(search.toLowerCase()) ||
-    e.departmentId.toLowerCase().includes(search.toLowerCase())
-  );
 
-  const topUnits = React.useMemo(() => {
+  // Current quarter board — latest submitted appraisal per user regardless of approval
+  const currentQBoard = React.useMemo(() => {
+    const byUser: Record<string, AppraisalRecord> = {};
+    appraisals.forEach(a => {
+      if (!byUser[a.userId] || new Date(a.submittedAt) > new Date(byUser[a.userId].submittedAt)) {
+        byUser[a.userId] = a;
+      }
+    });
+    return Object.values(byUser)
+      .filter(a => a.scores.grandTotal > 0)
+      .sort((a, b) => b.scores.grandTotal - a.scores.grandTotal)
+      .map(a => {
+        const s = a.scores.grandTotal;
+        const grade = s >= 100 ? 'O' : s >= 90 ? 'E' : s >= 80 ? 'VG' : s >= 70 ? 'G' : s >= 60 ? 'F' : 'P';
+        return { userId: a.userId, userName: a.userName, departmentId: a.departmentId, score: Math.round(s * 10) / 10, grade };
+      });
+  }, [appraisals]);
+
+  // Department board — average annual score per dept
+  const deptBoard = React.useMemo(() => {
     const byDept: Record<string, number[]> = {};
     rawBoard.forEach(e => {
       if (!byDept[e.departmentId]) byDept[e.departmentId] = [];
@@ -34,33 +57,121 @@ export const Leaderboard: React.FC = () => {
     return Object.entries(byDept)
       .map(([deptId, scores]) => {
         const dept = departments.find(d => d.id === deptId);
-        const avg = scores.reduce((s, v) => s + v, 0) / scores.length;
-        return { name: dept?.name ?? deptId, score: Math.round(avg * 10) / 10 };
+        const avg = Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 10) / 10;
+        const grade = avg >= 100 ? 'O' : avg >= 90 ? 'E' : avg >= 80 ? 'VG' : avg >= 70 ? 'G' : avg >= 60 ? 'F' : 'P';
+        return { id: deptId, name: dept?.name ?? deptId, score: avg, grade, count: scores.length };
       })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3);
+      .sort((a, b) => b.score - a.score);
   }, [rawBoard, departments]);
+
+  const activeBoard = activeTab === 'annual' ? rawBoard : activeTab === 'quarter' ? currentQBoard : [];
+
+  const board = activeBoard.filter(e =>
+    search === '' ||
+    e.userName.toLowerCase().includes(search.toLowerCase()) ||
+    e.departmentId.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const topUnits = React.useMemo(() => {
+    return deptBoard.slice(0, 3);
+  }, [deptBoard]);
 
   return (
     <div className="space-y-4 max-w-[1400px] mx-auto pb-8">
-      {/* Search */}
-      <section className="flex items-center gap-3">
-        <div className="flex-1 relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-600 transition-colors" size={16} />
-          <input type="text" placeholder="SEARCH STAFF..." value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full bg-white border border-slate-200 rounded-xl pl-11 pr-5 py-2.5 text-[11px] font-black tracking-widest text-slate-900 placeholder:text-slate-400 focus:border-primary-500 outline-none transition-all shadow-sm" />
+      {/* Tab switcher + Search */}
+      <section className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        {/* Tabs */}
+        <div className="flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm gap-1">
+          {([
+            { id: 'annual',     label: 'Annual' },
+            { id: 'quarter',    label: 'Current Quarter' },
+            { id: 'department', label: 'By Department' },
+          ] as { id: LeaderboardTab; label: string }[]).map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                'px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all',
+                activeTab === tab.id ? 'bg-primary-950 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-        <button className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all group shadow-sm">
-          <Filter size={16} className="text-slate-400 group-hover:rotate-180 transition-transform duration-500" />
-        </button>
+
+        {activeTab !== 'department' && (
+          <div className="flex-1 relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-600 transition-colors" size={16} />
+            <input type="text" placeholder="SEARCH STAFF..." value={search} onChange={e => setSearch(e.target.value)}
+              className="w-full bg-white border border-slate-200 rounded-xl pl-11 pr-5 py-2.5 text-[11px] font-black tracking-widest text-slate-900 placeholder:text-slate-400 focus:border-primary-500 outline-none transition-all shadow-sm" />
+          </div>
+        )}
       </section>
 
-      {board.length === 0 ? (
+      {board.length === 0 && activeTab !== 'department' ? (
         <div className="bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-12 text-center">
           <Trophy size={40} className="text-slate-200 mx-auto mb-3" />
           <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
             {search ? 'No staff match your search.' : 'No approved appraisals yet — rankings appear once appraisals are approved.'}
           </p>
+        </div>
+      ) : activeTab === 'department' ? (
+        /* Department Rankings */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <Card className="lg:col-span-8 p-0 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-50 flex items-center gap-3">
+              <div className="w-9 h-9 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400"><Medal size={18} /></div>
+              <div>
+                <h2 className="text-sm font-black text-slate-900 tracking-tighter uppercase italic">Department Rankings</h2>
+                <p className="text-[9px] text-slate-400 font-black uppercase tracking-[0.2em] mt-0.5">Average annual score per unit</p>
+              </div>
+            </div>
+            <div className="divide-y divide-slate-50">
+              {deptBoard.map((dept, idx) => (
+                <motion.div key={dept.id}
+                  initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.05 + idx * 0.04 }}
+                  className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/50 transition-all group">
+                  <div className="w-8 font-mono text-lg font-black text-slate-200 group-hover:text-primary-400 transition-colors text-center italic flex-shrink-0">
+                    {(idx + 1) < 10 ? `0${idx + 1}` : idx + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-black text-xs text-slate-900 uppercase italic tracking-tight">{dept.name}</h4>
+                    <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{dept.count} staff ranked</p>
+                  </div>
+                  <div className="hidden lg:block w-40 space-y-1">
+                    <div className="flex justify-between text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                      <span>Score</span><span>{dept.score}%</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${dept.score}%` }}
+                        className={cn('h-full rounded-full', GRADE_BAR[dept.grade] ?? 'bg-slate-300')} />
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-0.5 px-4 border-l border-slate-100 flex-shrink-0">
+                    <span className="text-lg font-black text-slate-900 font-mono italic">{dept.score}%</span>
+                    <Badge variant={(GRADE_VARIANTS[dept.grade] ?? 'default') as any} size="sm">{dept.grade}</Badge>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </Card>
+          <div className="lg:col-span-4 space-y-4">
+            <div className="bg-primary-950 rounded-2xl p-5 text-white shadow-heavy relative overflow-hidden">
+              <div className="relative z-10 space-y-3">
+                <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center text-primary-400"><Flame size={16} /></div>
+                <h3 className="font-black text-base tracking-tighter uppercase italic">Top Performing Unit</h3>
+                {deptBoard[0] && (
+                  <>
+                    <p className="text-2xl font-black tracking-tighter italic">{deptBoard[0].name}</p>
+                    <p className="text-[10px] font-black text-primary-300 uppercase tracking-widest">{deptBoard[0].score}% average — Grade {deptBoard[0].grade}</p>
+                  </>
+                )}
+              </div>
+              <div className="absolute top-0 right-0 p-4 opacity-[0.05] -rotate-12 translate-x-1/4"><Trophy size={140} /></div>
+            </div>
+          </div>
         </div>
       ) : (
         <>
@@ -122,7 +233,10 @@ export const Leaderboard: React.FC = () => {
                     <motion.div key={entry.userId}
                       initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.05 + idx * 0.03 }}
-                      className="flex items-center gap-2 sm:gap-4 px-3 sm:px-5 py-3 hover:bg-slate-50/50 transition-all cursor-pointer group">
+                      className={cn(
+                        "flex items-center gap-2 sm:gap-4 px-3 sm:px-5 py-3 hover:bg-slate-50/50 transition-all cursor-pointer group",
+                        isMe && "bg-primary-50/60 border-l-2 border-primary-500"
+                      )}>
                       <div className="w-8 font-mono text-lg font-black text-slate-200 group-hover:text-primary-400 transition-colors text-center leading-none italic flex-shrink-0">
                         {(idx + 1) < 10 ? `0${idx + 1}` : idx + 1}
                       </div>
@@ -145,7 +259,7 @@ export const Leaderboard: React.FC = () => {
                         </div>
                         <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
                           <motion.div initial={{ width: 0 }} animate={{ width: `${entry.score}%` }}
-                            className={cn("h-full rounded-full", idx === 0 ? "bg-primary-600" : "bg-slate-900")} />
+                            className={cn("h-full rounded-full", GRADE_BAR[entry.grade] ?? 'bg-slate-300')} />
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-0.5 px-3 sm:px-4 border-x border-slate-100 flex-shrink-0">

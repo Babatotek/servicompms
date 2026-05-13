@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Settings, Percent, BarChart3, Calendar, Award, Copy, Plus, Trash2, Save,
   CheckCircle2, ChevronRight, Database, Layout, Users, Search, Filter,
-  Mail, Shield, Building2, Bell, Clock, Zap
+  Mail, Shield, Building2, Bell, Clock, Zap, Globe, Target
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { UserRole } from '../types';
@@ -13,6 +13,13 @@ import { useOrg } from '../context/OrgContext';
 import { DepartmentModal } from '../components/admin/DepartmentModal';
 import { TemplateBuilder } from '../components/admin/TemplateBuilder';
 import { PerformanceTemplate } from '../lib/performanceTemplates';
+import { 
+  DEFAULT_GRADE_SCALE, 
+  DEFAULT_COMPETENCIES,
+  DEFAULT_OPERATIONS_ITEMS,
+  SECTION_WEIGHTS, 
+  APPRAISAL_PERIOD_DEFAULTS as DEFAULT_PERIODS 
+} from '../constants';
 
 const MOCK_USERS = [
   // NC
@@ -55,27 +62,8 @@ const MOCK_USERS = [
 
 
 
-const DEFAULT_GRADE_SCALE = [
-  { key: 'O', label: 'Outstanding', threshold: 100, color: '#16A34A' },
-  { key: 'E', label: 'Excellent', threshold: 90, color: '#2563EB' },
-  { key: 'VG', label: 'Very Good', threshold: 80, color: '#7C3AED' },
-  { key: 'G', label: 'Good', threshold: 70, color: '#D97706' },
-  { key: 'F', label: 'Fair', threshold: 60, color: '#EA580C' },
-  { key: 'P', label: 'Poor', threshold: 50, color: '#DC2626' },
-];
 
-const DEFAULT_WEIGHTS = { section4: 70, section5: 20, section6: 10 };
-
-const DEFAULT_PERIODS = [
-  { label: 'Q1', start: 'Jan', end: 'Mar', opens: '1 April', closes: '15 April', active: true },
-  { label: 'Q2', start: 'Apr', end: 'Jun', opens: '1 July', closes: '15 July', active: true },
-  { label: 'Q3', start: 'Jul', end: 'Sep', opens: '1 October', closes: '15 October', active: true },
-  { label: 'Q4', start: 'Oct', end: 'Dec', opens: '1 January', closes: '15 January', active: true },
-];
-
-
-
-type Tab = 'users' | 'scoring' | 'periods' | 'competencies' | 'templates' | 'notifications';
+type Tab = 'users' | 'scoring' | 'periods' | 'competencies' | 'templates' | 'notifications' | 'mpms_library' | 'unit_weights';
 
 const TAB_CONFIG: { id: Tab; icon: React.ReactNode; label: string }[] = [
   { id: 'users',         icon: <Users size={14} />,    label: 'Staff & Organization' },
@@ -84,6 +72,8 @@ const TAB_CONFIG: { id: Tab; icon: React.ReactNode; label: string }[] = [
   { id: 'competencies',  icon: <Award size={14} />,    label: 'Competencies & Ops' },
   { id: 'templates',     icon: <Layout size={14} />,   label: 'KRA Template Library' },
   { id: 'notifications', icon: <Mail size={14} />,     label: 'Notifications' },
+  { id: 'mpms_library',  icon: <Globe size={14} />,    label: 'MPMS KPI Library' },
+  { id: 'unit_weights',  icon: <Target size={14} />,   label: 'Unit Weights' },
 ];
 
 // Compact section header used across all tabs
@@ -101,22 +91,48 @@ const SectionHeader: React.FC<{ icon: React.ReactNode; title: string; subtitle: 
 );
 
 export const AdminSettings: React.FC = () => {
-  const { departments, templates, deleteTemplate } = useOrg();
+  const { departments, templates, deleteTemplate, mpmsKRAs, mpmsKPIs, mpmsCategories, mpmsObjectives } = useOrg();
   const [activeTab, setActiveTab] = useState<Tab>('users');
   const [userSubTab, setUserSubTab] = useState<'staff' | 'depts'>('staff');
   const [saved, setSaved] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const [showDeptModal, setShowDeptModal] = useState(false);
   const [showTemplateBuilder, setShowTemplateBuilder] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<PerformanceTemplate | undefined>();
 
-  const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2500); };
+  // ── Controlled scoring weights (PRD Gap 3 fix) ───────────────────────────
+  const [weights, setWeights] = useState({
+    section4: SECTION_WEIGHTS.taskPerformance,
+    section5: SECTION_WEIGHTS.competencies,
+    section6: SECTION_WEIGHTS.operations,
+  });
+  const weightSum = weights.section4 + weights.section5 + weights.section6;
+  const weightValid = weightSum === 100;
+
+  // ── Controlled grade scale ────────────────────────────────────────────────
+  const [gradeScale, setGradeScale] = useState(DEFAULT_GRADE_SCALE.map(g => ({ ...g })));
+
+  const handleWeightChange = (key: 'section4' | 'section5' | 'section6', val: string) => {
+    const num = Math.max(0, Math.min(100, parseInt(val) || 0));
+    setWeights(prev => ({ ...prev, [key]: num }));
+  };
+
+  const handleGradeChange = (id: string, field: 'label' | 'threshold', val: string) => {
+    setGradeScale(prev => prev.map(g =>
+      g.id === id ? { ...g, [field]: field === 'threshold' ? parseInt(val) || 0 : val } : g
+    ));
+  };
+
+  const handleSave = () => {
+    if (!weightValid) return;
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
 
   // Use live departments from OrgContext for filtering
   const filteredDepts = departments.filter(d =>
     d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    d.head.toLowerCase().includes(searchQuery.toLowerCase()) ||
     d.code.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -268,12 +284,12 @@ export const AdminSettings: React.FC = () => {
                       </div>
                       <div className="space-y-1.5 pt-2 border-t border-slate-50">
                         <div className="flex items-center justify-between">
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Unit Head</span>
-                          <span className="text-[10px] font-black text-slate-900 uppercase italic tracking-tight">{dept.head}</span>
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Unit Weight</span>
+                          <span className="text-[10px] font-black text-slate-900 uppercase italic tracking-tight">{dept.unitWeight}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Personnel</span>
-                          <span className="text-[10px] font-black text-slate-900 uppercase italic tracking-tight">{dept.staffCount} Active</span>
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Status</span>
+                          <Badge variant={dept.isActive ? 'primary' : 'default'} size="sm">{dept.isActive ? 'Active' : 'Inactive'}</Badge>
                         </div>
                       </div>
                       <div className="flex gap-2 pt-1">
@@ -309,57 +325,73 @@ export const AdminSettings: React.FC = () => {
       {/* ── SCORING TAB ── */}
       {activeTab === 'scoring' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {/* Section Weights */}
+          {/* Section Weights — controlled with 100% validation */}
           <Card className="p-4 space-y-4">
             <SectionHeader icon={<Percent size={14} />} title="Composite Weights" subtitle="Distribution of final performance score" />
-            {loading ? <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}</div> : (
-              <div className="space-y-4">
-                {[
-                  { label: 'Section 4 — Task Performance', value: DEFAULT_WEIGHTS.section4, color: 'bg-primary-600' },
-                  { label: 'Section 5 — Competencies', value: DEFAULT_WEIGHTS.section5, color: 'bg-indigo-500' },
-                  { label: 'Section 6 — Operations', value: DEFAULT_WEIGHTS.section6, color: 'bg-violet-500' },
-                ].map(w => (
-                  <div key={w.label} className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest italic">{w.label}</label>
-                      <span className="font-mono text-base font-black text-primary-600 italic">{w.value}%</span>
-                    </div>
-                    <div className="relative h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div className={cn("absolute top-0 left-0 h-full rounded-full transition-all", w.color)} style={{ width: `${w.value}%` }} />
-                      <input type="range" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" defaultValue={w.value} />
-                    </div>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between p-3 rounded-xl bg-primary-950 text-white mt-2">
-                  <span className="text-[9px] font-black uppercase tracking-[0.3em] italic opacity-60">Aggregate Sum</span>
-                  <span className="text-xl font-black italic tracking-tighter">100%</span>
-                </div>
-              </div>
-            )}
-          </Card>
-
-          {/* Grade Scale */}
-          <Card className="p-4 space-y-4">
-            <SectionHeader icon={<BarChart3 size={14} />} title="Grade Definitions" subtitle="Labels and score thresholds"
-              action={<button className="p-2 bg-slate-50 hover:bg-primary-950 hover:text-white rounded-lg text-slate-700 transition-all active:scale-95"><Plus size={14} /></button>} />
-            {loading ? <div className="space-y-2">{[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-10 w-full rounded-lg" />)}</div> : (
-              <div className="space-y-1.5">
-                {DEFAULT_GRADE_SCALE.map(grade => (
-                  <div key={grade.key} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-50 bg-slate-50/30 group hover:border-primary-100 hover:bg-white transition-all">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-black italic text-sm flex-shrink-0" style={{ backgroundColor: grade.color }}>{grade.key}</div>
-                    <div className="flex-1 min-w-0">
-                      <input type="text" defaultValue={grade.label} className="w-full bg-transparent border-none text-xs font-black text-slate-900 focus:ring-0 p-0 uppercase italic tracking-tight outline-none" />
-                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic mt-0.5">Grade Label</p>
-                    </div>
-                    <div className="flex items-center gap-1 border-l border-slate-100 pl-3">
-                      <input type="number" defaultValue={grade.threshold} className="w-10 bg-transparent border-none text-right font-mono text-sm font-black text-slate-900 focus:ring-0 p-0 italic outline-none" />
+            <div className="space-y-4">
+              {([
+                { key: 'section4' as const, label: 'Section 4 — Task Performance', color: 'bg-primary-600' },
+                { key: 'section5' as const, label: 'Section 5 — Competencies',     color: 'bg-indigo-500' },
+                { key: 'section6' as const, label: 'Section 6 — Operations',       color: 'bg-violet-500' },
+              ]).map(w => (
+                <div key={w.key} className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest italic">{w.label}</label>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number" min={0} max={100}
+                        value={weights[w.key]}
+                        onChange={e => handleWeightChange(w.key, e.target.value)}
+                        className="w-12 text-right font-mono text-sm font-black text-primary-600 italic bg-transparent border-none outline-none focus:ring-0 p-0"
+                      />
                       <span className="text-xs font-black text-slate-400 italic">%</span>
                     </div>
-                    <button className="p-1 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all"><Trash2 size={13} /></button>
                   </div>
-                ))}
+                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div className={cn('h-full rounded-full transition-all', w.color)} style={{ width: `${weights[w.key]}%` }} />
+                  </div>
+                </div>
+              ))}
+              <div className={cn(
+                'flex items-center justify-between p-3 rounded-xl text-white mt-2',
+                weightValid ? 'bg-primary-950' : 'bg-red-600'
+              )}>
+                <span className="text-[9px] font-black uppercase tracking-[0.3em] italic opacity-60">
+                  {weightValid ? 'Aggregate Sum ✓' : `Sum = ${weightSum}% — must equal 100%`}
+                </span>
+                <span className="text-xl font-black italic tracking-tighter">{weightSum}%</span>
               </div>
-            )}
+            </div>
+          </Card>
+
+          {/* Grade Scale — controlled */}
+          <Card className="p-4 space-y-4">
+            <SectionHeader icon={<BarChart3 size={14} />} title="Grade Definitions" subtitle="Labels and score thresholds" />
+            <div className="space-y-1.5">
+              {gradeScale.map(grade => (
+                <div key={grade.key} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-50 bg-slate-50/30 group hover:border-primary-100 hover:bg-white transition-all">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-black italic text-sm flex-shrink-0" style={{ backgroundColor: grade.color }}>{grade.key}</div>
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="text"
+                      value={grade.label}
+                      onChange={e => handleGradeChange(grade.id, 'label', e.target.value)}
+                      className="w-full bg-transparent border-none text-xs font-black text-slate-900 focus:ring-0 p-0 uppercase italic tracking-tight outline-none"
+                    />
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic mt-0.5">Grade Label</p>
+                  </div>
+                  <div className="flex items-center gap-1 border-l border-slate-100 pl-3">
+                    <input
+                      type="number"
+                      value={grade.threshold}
+                      onChange={e => handleGradeChange(grade.id, 'threshold', e.target.value)}
+                      className="w-10 bg-transparent border-none text-right font-mono text-sm font-black text-slate-900 focus:ring-0 p-0 italic outline-none"
+                    />
+                    <span className="text-xs font-black text-slate-400 italic">%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </Card>
         </div>
       )}
@@ -376,18 +408,18 @@ export const AdminSettings: React.FC = () => {
                   <div className="flex justify-between items-center">
                     <div>
                       <h4 className="text-2xl font-black text-slate-900 italic tracking-tighter leading-none">{period.label}</h4>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic mt-1">{period.start} — {period.end}</p>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic mt-1">{period.coverage}</p>
                     </div>
-                    <Badge variant={period.active ? 'primary' : 'default'} size="sm">{period.active ? 'Active' : 'Off'}</Badge>
+                    <Badge variant="primary" size="sm">Active</Badge>
                   </div>
                   <div className="space-y-2">
                     <div className="space-y-1">
                       <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic">Opens</p>
-                      <input type="text" defaultValue={period.opens} className="w-full bg-white border border-slate-100 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-900 uppercase italic shadow-sm outline-none focus:border-primary-300" />
+                      <input type="text" defaultValue={period.submissionOpens} className="w-full bg-white border border-slate-100 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-900 uppercase italic shadow-sm outline-none focus:border-primary-300" />
                     </div>
                     <div className="space-y-1">
                       <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic">Closes</p>
-                      <input type="text" defaultValue={period.closes} className="w-full bg-white border border-slate-100 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-900 uppercase italic shadow-sm outline-none focus:border-primary-300" />
+                      <input type="text" defaultValue={period.submissionCloses} className="w-full bg-white border border-slate-100 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-900 uppercase italic shadow-sm outline-none focus:border-primary-300" />
                     </div>
                   </div>
                   <div className="flex gap-2 pt-1">
@@ -405,27 +437,28 @@ export const AdminSettings: React.FC = () => {
       {activeTab === 'competencies' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {/* Competency clusters */}
+          {/* Competency clusters */}
           <Card className="p-4 space-y-4">
             <SectionHeader icon={<Award size={14} />} title="Competency Clusters" subtitle="Generic, Functional, Ethics & Values"
               action={<button className="p-2 bg-slate-50 hover:bg-primary-950 hover:text-white rounded-lg text-slate-700 transition-all"><Plus size={14} /></button>} />
             {loading ? <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}</div> : (
               <div className="space-y-3">
-                {[
-                  { cluster: 'Generic Competencies', weight: 8, items: ['Drive for Results (4)', 'Collaborating & Partnering (2)', 'Effective Communication (2)'] },
-                  { cluster: 'Functional Competencies', weight: 8, items: ['Policy Management (2)', 'Public Relations Management (2)', 'Information & Records Management (2)'] },
-                  { cluster: 'Ethics & Values', weight: 4, items: ['Integrity (2)', 'Inclusiveness (2)', 'Transparency & Accountability (2)'] },
-                ].map(c => (
+                {DEFAULT_COMPETENCIES.map(c => (
                   <div key={c.cluster} className="p-3 rounded-xl border border-slate-100 bg-slate-50/30 hover:bg-white hover:border-primary-100 transition-all group">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-black text-slate-900 uppercase italic tracking-tight">{c.cluster}</span>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Weight</span>
-                        <span className="text-sm font-black text-primary-600 font-mono italic">{c.weight}</span>
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Weight Sum</span>
+                        <span className="text-sm font-black text-primary-600 font-mono italic">
+                          {c.items.reduce((acc, item) => acc + item.target, 0)}
+                        </span>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {c.items.map(item => (
-                        <span key={item} className="text-[9px] font-black text-slate-600 bg-white border border-slate-100 px-2 py-1 rounded-lg uppercase italic tracking-tight">{item}</span>
+                        <span key={item.name} className="text-[9px] font-black text-slate-600 bg-white border border-slate-100 px-2 py-1 rounded-lg uppercase italic tracking-tight">
+                          {item.name} ({item.target})
+                        </span>
                       ))}
                     </div>
                   </div>
@@ -444,12 +477,7 @@ export const AdminSettings: React.FC = () => {
               action={<button className="p-2 bg-slate-50 hover:bg-primary-950 hover:text-white rounded-lg text-slate-700 transition-all"><Plus size={14} /></button>} />
             {loading ? <div className="space-y-2">{[1,2,3,4].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}</div> : (
               <div className="space-y-2">
-                {[
-                  { name: 'Punctuality / Attendance', target: 4, max: 5 },
-                  { name: 'Work Turnaround Time', target: 3, max: 5 },
-                  { name: 'Innovation on the Job', target: 3, max: 5 },
-                  { name: 'Professional Ethics & Integrity', target: 4, max: 5 },
-                ].map(item => (
+                {DEFAULT_OPERATIONS_ITEMS.map(item => (
                   <div key={item.name} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-100 bg-slate-50/30 group hover:bg-white hover:border-primary-100 transition-all">
                     <div className="flex-1">
                       <p className="text-xs font-black text-slate-900 uppercase italic tracking-tight">{item.name}</p>
@@ -468,7 +496,7 @@ export const AdminSettings: React.FC = () => {
                 ))}
                 <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900 text-white mt-1">
                   <span className="text-[9px] font-black uppercase tracking-widest italic opacity-60">Max Total Points</span>
-                  <span className="text-base font-black font-mono italic">20 pts</span>
+                  <span className="text-base font-black font-mono italic">10 pts</span>
                 </div>
               </div>
             )}
@@ -586,6 +614,89 @@ export const AdminSettings: React.FC = () => {
             )}
           </Card>
         </div>
+      )}
+      {/* ── MPMS KPI LIBRARY TAB ── */}
+      {activeTab === 'mpms_library' && (
+        <div className="space-y-3">
+          <Card className="p-4 space-y-4">
+            <SectionHeader
+              icon={<Globe size={14} />}
+              title="MPMS KPI Library"
+              subtitle="Institutional KPIs cascaded from OHCSF framework — master source for all department templates"
+            />
+            <div className="space-y-4">
+              {mpmsCategories.map(cat => {
+                const catKRAs = mpmsKRAs.filter(k => k.categoryId === cat.id);
+                return (
+                  <div key={cat.id} className="space-y-2">
+                    <div className="flex items-center justify-between px-3 py-2 bg-primary-950 text-white rounded-xl">
+                      <span className="text-[10px] font-black uppercase tracking-widest italic">{cat.name}</span>
+                      <span className="text-[10px] font-black font-mono">{cat.weight}%</span>
+                    </div>
+                    {catKRAs.map(kra => {
+                      const kraObjs = mpmsObjectives.filter(o => o.kraId === kra.id);
+                      const kraKpis = mpmsKPIs.filter(k => kraObjs.some(o => o.id === k.objectiveId));
+                      return (
+                        <div key={kra.id} className="ml-3 border-l-2 border-slate-100 pl-3 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-slate-900 uppercase italic tracking-tight">{kra.name}</span>
+                            <span className="text-[9px] font-black text-slate-400 font-mono">Weight: {kra.weight}</span>
+                          </div>
+                          {kraKpis.map(kpi => {
+                            const dept = departments.find(d => d.id === kpi.leadUnitId);
+                            return (
+                              <div key={kpi.id} className="flex items-start justify-between gap-3 px-3 py-2 bg-slate-50 rounded-lg border border-slate-100">
+                                <p className="text-[10px] font-medium text-slate-700 flex-1">{kpi.description}</p>
+                                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                  <Badge variant="primary" size="sm">{dept?.code ?? kpi.leadUnitId}</Badge>
+                                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Target: {kpi.annualTarget}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {kraKpis.length === 0 && (
+                            <p className="text-[9px] text-slate-400 italic pl-2">No KPIs seeded yet for this KRA.</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ── UNIT WEIGHTS TAB ── */}
+      {activeTab === 'unit_weights' && (
+        <Card className="p-4 space-y-4">
+          <SectionHeader
+            icon={<Target size={14} />}
+            title="Unit Weights"
+            subtitle="MPMS institutional contribution weight per department (Sheet8) — total must equal 50"
+          />
+          <div className="space-y-2">
+            {departments.map(dept => (
+              <div key={dept.id} className="flex items-center gap-4 px-3 py-2.5 rounded-xl border border-slate-100 bg-slate-50/30 hover:bg-white hover:border-primary-100 transition-all">
+                <div className="w-8 h-8 bg-primary-50 rounded-lg flex items-center justify-center text-primary-600 flex-shrink-0">
+                  <span className="text-[9px] font-black uppercase">{dept.code.slice(0,3)}</span>
+                </div>
+                <span className="flex-1 text-xs font-black text-slate-900 uppercase italic tracking-tight">{dept.name}</span>
+                <div className="w-32 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-primary-500 rounded-full" style={{ width: `${(dept.unitWeight / 50) * 100}%` }} />
+                </div>
+                <span className="text-sm font-black text-primary-600 font-mono italic w-8 text-right">{dept.unitWeight}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-primary-950 text-white mt-2">
+              <span className="text-[9px] font-black uppercase tracking-[0.3em] italic opacity-60">Total Weight</span>
+              <span className="text-xl font-black italic tracking-tighter">
+                {departments.reduce((s, d) => s + d.unitWeight, 0)} / 50
+              </span>
+            </div>
+          </div>
+        </Card>
       )}
     </div>
   );

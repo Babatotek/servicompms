@@ -66,7 +66,7 @@ interface AppraisalContextType {
 
 const AppraisalContext = createContext<AppraisalContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'servicom_appraisals';
+const STORAGE_KEY = 'servicom_appraisals_v2';
 
 const loadFromStorage = (): AppraisalRecord[] => {
   try {
@@ -90,12 +90,13 @@ const saveToStorage = (records: AppraisalRecord[]) => {
 };
 
 // Map grandTotal score to grade key
+// Verified from PRD Section 7.2 (Authoritative Scale)
 const scoreToGrade = (score: number): string => {
-  if (score >= 90) return 'O';
-  if (score >= 80) return 'E';
-  if (score >= 70) return 'VG';
-  if (score >= 60) return 'G';
-  if (score >= 50) return 'F';
+  if (score >= 100) return 'O';
+  if (score >= 90) return 'E';
+  if (score >= 80) return 'VG';
+  if (score >= 70) return 'G';
+  if (score >= 60) return 'F';
   return 'P';
 };
 
@@ -197,7 +198,7 @@ export const AppraisalProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return appraisals
       .filter(a => a.userId === userId && a.scores.grandTotal > 0)
       .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime())
-      .map(a => ({ name: a.period, score: Math.round(a.scores.grandTotal * 10) / 10 }));
+      .map(a => ({ name: a.period, score: Math.round(a.scores.grandTotal * 100) / 100 }));
   }, [appraisals]);
 
   // Leaderboard: latest approved record per user, sorted by grandTotal desc
@@ -216,7 +217,7 @@ export const AppraisalProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         userId: a.userId,
         userName: a.userName,
         departmentId: a.departmentId,
-        score: Math.round(a.scores.grandTotal * 10) / 10,
+        score: Math.round(a.scores.grandTotal * 100) / 100,
         grade: scoreToGrade(a.scores.grandTotal),
       }));
   }, [appraisals]);

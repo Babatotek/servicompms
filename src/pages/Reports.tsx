@@ -1,60 +1,110 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
-  FileText, 
-  Download, 
-  Search, 
-  Filter, 
-  Calendar, 
-  User, 
-  Building2, 
-  ChevronRight,
-  Printer,
-  Share2,
-  MoreVertical
+  FileText, Download, Search, Filter, Calendar,
+  User, Building2, ChevronRight, Printer, Share2, MoreVertical
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNotifications } from '../context/NotificationContext';
+import { useAuth } from '../context/AuthContext';
+import { useAppraisals } from '../context/AppraisalContext';
+import { useOrg } from '../context/OrgContext';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
-
-const MOCK_REPORTS = [
-  { id: 'R-001', name: 'ANNUAL PERFORMANCE REPORT 2025', type: 'Annual', department: 'Organization-wide', date: 'Dec 20, 2025', size: '2.4 MB', author: 'System Admin' },
-  { id: 'R-002', name: 'Q4 2025 DEPARTMENT SUMMARY', type: 'Quarterly', department: 'Accounts', date: 'Jan 05, 2026', size: '1.1 MB', author: 'Jane Smith' },
-  { id: 'R-003', name: 'STAF APPRAISAL ARCHIVE - OLWATOSIN', type: 'Individual', department: 'Accounts', date: 'Oct 12, 2025', size: '850 KB', author: 'Dr. Jane Smith' },
-  { id: 'R-004', name: 'COMPETENCY GAP ANALYSIS Q3', type: 'Special', department: 'Admin', date: 'Sep 30, 2025', size: '3.2 MB', author: 'HR Department' },
-  { id: 'R-005', name: 'KPI ATTAINMENT OVERVIEW', type: 'Annual', department: 'Operations', date: 'Jan 15, 2026', size: '4.5 MB', author: 'System Admin' },
-  { id: 'R-006', name: 'PROBATION REVIEW SUMMARY', type: 'Special', department: 'HR', date: 'Feb 02, 2026', size: '920 KB', author: 'HR Admin' },
-];
+import { UserRole, AppraisalStatus } from '../types';
 
 export const Reports: React.FC = () => {
   const { addNotification } = useNotifications();
+  const { user } = useAuth();
+  const { appraisals } = useAppraisals();
+  const { departments } = useOrg();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('All');
-  // No fake timer — loading state will be driven by real API calls when backend is connected
   const loading = false;
+
+  // Build report list dynamically from real appraisal data
+  const reports = useMemo(() => {
+    const list: any[] = [];
+
+    // Individual appraisal reports — one per approved/counter-signed appraisal
+    appraisals
+      .filter(a => a.status === AppraisalStatus.APPROVED || a.status === AppraisalStatus.COUNTER_SIGNED)
+      .forEach(a => {
+        list.push({
+          id: a.id,
+          name: `${a.userName.toUpperCase()} — ${a.period} APPRAISAL`,
+          type: 'Individual',
+          department: departments.find(d => d.id === a.departmentId)?.name ?? a.departmentId,
+          date: new Date(a.submittedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+          author: a.userName,
+          appraisalData: a,
+        });
+      });
+
+    // Department summary reports — one per dept that has approved appraisals
+    const deptIds = [...new Set(appraisals.filter(a => a.status === AppraisalStatus.APPROVED || a.status === AppraisalStatus.COUNTER_SIGNED).map(a => a.departmentId))];
+    deptIds.forEach(deptId => {
+      const dept = departments.find(d => d.id === deptId);
+      if (!dept) return;
+      list.push({
+        id: `dept_${deptId}`,
+        name: `${dept.name.toUpperCase()} — DEPARTMENT SUMMARY 2026`,
+        type: 'Quarterly',
+        department: dept.name,
+        date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        author: 'System',
+        appraisalData: null,
+      });
+    });
+
+    // Org-wide annual report (exec only)
+    if (user?.role === UserRole.NC || user?.role === UserRole.DEPUTY_DIRECTOR || user?.role === UserRole.SUPER_ADMIN) {
+      if (appraisals.length > 0) {
+        list.push({
+          id: 'org_annual_2026',
+          name: 'SERVICOM ANNUAL PERFORMANCE REPORT 2026',
+          type: 'Annual',
+          department: 'Organisation-Wide',
+          date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+          author: 'System Admin',
+          appraisalData: null,
+        });
+      }
+    }
+
+    return list;
+  }, [appraisals, departments, user]);
 
   const handleDownload = async (report: any) => {
     addNotification('info', 'Generating Report', `Preparing ${report.name}...`);
     try {
       const { generateAppraisalPDF } = await import('../lib/exportUtils');
-      generateAppraisalPDF({
-        name: report.author,
-        ippis: report.id,
-        department: report.department,
-        designation: report.type,
-        score: 85,
-        status: 'Archived',
-        lastUpdated: report.date,
-      }, report.name.replace(/\s+/g, '_'));
+      if (report.appraisalData) {
+        generateAppraisalPDF({
+          userName: report.appraisalData.userName,
+          ippisNo: report.appraisalData.ippisNo,
+          department: report.department,
+          designation: report.appraisalData.designation,
+          period: report.appraisalData.period,
+          totalScore: report.appraisalData.scores.grandTotal,
+          grade: report.appraisalData.scores.grandTotal >= 100 ? 'O'
+            : report.appraisalData.scores.grandTotal >= 90 ? 'E'
+            : report.appraisalData.scores.grandTotal >= 80 ? 'VG'
+            : report.appraisalData.scores.grandTotal >= 70 ? 'G'
+            : report.appraisalData.scores.grandTotal >= 60 ? 'F' : 'P',
+        }, report.name.replace(/\s+/g, '_'));
+      } else {
+        generateAppraisalPDF({ userName: report.name, department: report.department }, report.name.replace(/\s+/g, '_'));
+      }
+      addNotification('success', 'Report Ready', `${report.name} has been downloaded.`);
     } catch {
       addNotification('error', 'Export Failed', 'Could not generate the report.');
     }
   };
 
-  const filteredReports = MOCK_REPORTS.filter(report => {
-    const matchesSearch = report.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+  const filteredReports = reports.filter(report => {
+    const matchesSearch = report.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          report.department.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesType = filterType === 'All' || report.type === filterType;
     return matchesSearch && matchesType;
@@ -207,8 +257,12 @@ export const Reports: React.FC = () => {
               <FileText size={40} />
            </div>
            <div>
-              <h3 className="text-xl font-black text-slate-900">No reports found</h3>
-              <p className="text-slate-500 font-medium">Try adjusting your search query or filter type.</p>
+              <h3 className="text-xl font-black text-slate-900">No reports available</h3>
+              <p className="text-slate-500 font-medium">
+                {appraisals.length === 0
+                  ? 'Reports will appear here once staff submit and approve their appraisals.'
+                  : 'No reports match your current search or filter.'}
+              </p>
            </div>
         </div>
       )}

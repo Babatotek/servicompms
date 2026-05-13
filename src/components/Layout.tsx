@@ -15,6 +15,8 @@ import {
   X,
   Search,
   Command,
+  Globe,
+  Target,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
@@ -104,11 +106,19 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     { to: '/leaderboard', icon: <Trophy size={20} />, label: 'Leaderboard' },
   ];
   
+  const mpmsItems: SidebarNavItem[] = [];
+  if (user?.role === UserRole.NC || user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.DEPUTY_DIRECTOR) {
+    mpmsItems.push({ to: '/mpms', icon: <Globe size={20} />, label: 'Institutional Scorecard' });
+  }
+  if (user?.role === UserRole.DEPT_HEAD) {
+    mpmsItems.push({ to: '/mpms/entry', icon: <Target size={20} />, label: 'Institutional Entry' });
+  }
+
   if (isAdmin) {
     systemItems.push({ to: '/admin/settings', icon: <Settings size={20} />, label: 'Configuration' });
   }
 
-  const allNavItems = [...appraiseeItems, ...appraiserItems, ...systemItems];
+  const allNavItems = [...appraiseeItems, ...appraiserItems, ...mpmsItems, ...systemItems];
 
   return (
     <div className="flex min-h-screen bg-[#F8FAFC]">
@@ -145,6 +155,21 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <p className="px-2 text-[9px] font-black text-slate-400 uppercase tracking-[0.25em]">Management</p>
               <div className="space-y-1">
                 {appraiserItems.map((item) => (
+                  <NavItem 
+                    key={item.to} 
+                    {...item} 
+                    isActive={location.pathname === item.to || location.pathname.startsWith(item.to)} 
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {mpmsItems.length > 0 && (
+            <div className="space-y-4">
+              <p className="px-2 text-[9px] font-black text-slate-400 uppercase tracking-[0.25em]">Institutional MPMS</p>
+              <div className="space-y-1">
+                {mpmsItems.map((item) => (
                   <NavItem 
                     key={item.to} 
                     {...item} 
