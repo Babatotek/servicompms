@@ -11,6 +11,8 @@ import { AppraisalProvider } from './context/AppraisalContext';
 import { OrgProvider } from './context/OrgContext';
 import { ContractProvider } from './context/ContractContext';
 import { PrivateRoute } from './components/PrivateRoute';
+import { Login } from './pages/Login';
+import { AppSkeleton } from './components/Skeletons';
 
 // Route-level code splitting
 const Dashboard          = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
@@ -24,13 +26,9 @@ const Reports            = lazy(() => import('./pages/Reports').then(m => ({ def
 const TeamReview         = lazy(() => import('./pages/TeamReview').then(m => ({ default: m.TeamReview })));
 const MPMSDashboard       = lazy(() => import('./pages/MPMSDashboard').then(m => ({ default: m.MPMSDashboard })));
 const MPMSAchievementEntry = lazy(() => import('./pages/MPMSAchievementEntry').then(m => ({ default: m.MPMSAchievementEntry })));
-const Login              = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
+const Profile            = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
+const MonthlyEvaluation  = lazy(() => import('./pages/MonthlyEvaluation').then(m => ({ default: m.MonthlyEvaluation })));
 
-const PageLoader = () => (
-  <div className="min-h-screen flex items-center justify-center bg-slate-50">
-    <div className="w-8 h-8 border-4 border-slate-900 border-t-transparent rounded-full animate-spin" />
-  </div>
-);
 
 export default function App() {
   return (
@@ -40,12 +38,13 @@ export default function App() {
           <ContractProvider>
             <OrgProvider>
               <Router>
-                <Suspense fallback={<PageLoader />}>
+                <Suspense fallback={<AppSkeleton />}>
                   <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
                     <Route path="/my-appraisal" element={<PrivateRoute><AppraisalForm /></PrivateRoute>} />
                     <Route path="/my-contract" element={<PrivateRoute><PerformanceContract /></PrivateRoute>} />
+                    <Route path="/monthly-review" element={<PrivateRoute><MonthlyEvaluation /></PrivateRoute>} />
                     <Route path="/team" element={<PrivateRoute><TeamReview /></PrivateRoute>} />
                     <Route path="/performance-overview" element={<PrivateRoute><PerformanceOverview /></PrivateRoute>} />
                     <Route path="/leaderboard" element={<PrivateRoute><Leaderboard /></PrivateRoute>} />
@@ -54,6 +53,7 @@ export default function App() {
                     <Route path="/mpms/entry" element={<PrivateRoute><MPMSAchievementEntry /></PrivateRoute>} />
                     <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
                     <Route path="/admin/settings" element={<PrivateRoute><AdminSettings /></PrivateRoute>} />
+                    <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
                     <Route path="*" element={<Navigate to="/" />} />
                   </Routes>
                 </Suspense>

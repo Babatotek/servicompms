@@ -7,13 +7,15 @@ interface CardProps {
   className?: string;
   hover?: boolean;
   animate?: boolean;
+  onClick?: () => void;
 }
 
 export const Card: React.FC<CardProps> = ({ 
   children, 
   className, 
   hover = true,
-  animate = true
+  animate = true,
+  onClick,
 }) => {
   const Component = animate ? motion.div : 'div';
   
@@ -21,6 +23,7 @@ export const Card: React.FC<CardProps> = ({
     <Component
       initial={animate ? { opacity: 0, scale: 0.98 } : undefined}
       animate={animate ? { opacity: 1, scale: 1 } : undefined}
+      onClick={onClick}
       className={cn(
         "bg-white p-6 rounded-3xl border border-slate-100 shadow-premium transition-all duration-300",
         hover && "hover:shadow-heavy hover:border-slate-200/50",

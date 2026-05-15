@@ -62,7 +62,7 @@ export const TemplateBuilder: React.FC<Props> = ({ onClose, existing }) => {
     updateKPI(kraId, objId, kpiId, { criteria: { ...kras.find(k => k._id === kraId)!.objectives.find(o => o._id === objId)!.kpis.find(p => p._id === kpiId)!.criteria, [grade]: parseFloat(val) || 0 } });
 
   // ── Validate & save ──────────────────────────────────────────────────────
-  const handleSave = () => {
+  const handleSave = (isDuplicate = false) => {
     const errs: string[] = [];
     if (!name.trim()) errs.push('Template name is required.');
     if (!departmentId) errs.push('Please assign a department.');
@@ -103,12 +103,12 @@ export const TemplateBuilder: React.FC<Props> = ({ onClose, existing }) => {
       })),
     };
 
-    if (existing) {
+    if (existing && !isDuplicate) {
       updateTemplate(existing.id, built);
       addNotification('success', 'Template Updated', `${name} has been updated.`);
     } else {
       addTemplate(built);
-      addNotification('success', 'Template Created', `${name} is now available in the contract form.`);
+      addNotification('success', 'Template Created', `${name} is now available as a new template.`);
     }
     onClose();
   };
@@ -177,7 +177,7 @@ export const TemplateBuilder: React.FC<Props> = ({ onClose, existing }) => {
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Wt</span>
                     <input type="number" value={kra.weight} onChange={e => updateKRA(kra._id, { weight: parseFloat(e.target.value) || 0 })}
-                      className="w-14 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-black text-primary-600 font-mono text-center outline-none focus:border-primary-400" />
+                      className="w-24 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-black text-primary-600 font-mono text-center outline-none focus:border-primary-400" />
                     <span className="text-[9px] font-black text-slate-400 italic">%</span>
                   </div>
                   {kras.length > 1 && (
@@ -200,7 +200,7 @@ export const TemplateBuilder: React.FC<Props> = ({ onClose, existing }) => {
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic">GW</span>
                             <input type="number" value={obj.gradedWeight} step="0.5" onChange={e => updateObj(kra._id, obj._id, { gradedWeight: parseFloat(e.target.value) || 0 })}
-                              className="w-12 bg-white border border-slate-200 rounded-lg px-1.5 py-1 text-[10px] font-black text-indigo-600 font-mono text-center outline-none focus:border-indigo-400" />
+                              className="w-20 bg-white border border-slate-200 rounded-lg px-1.5 py-1 text-[10px] font-black text-indigo-600 font-mono text-center outline-none focus:border-indigo-400" />
                           </div>
                           {kra.objectives.length > 1 && (
                             <button onClick={() => removeObj(kra._id, obj._id)} className="p-1 text-slate-300 hover:text-red-500 transition-colors flex-shrink-0"><Trash2 size={12} /></button>
@@ -285,7 +285,12 @@ export const TemplateBuilder: React.FC<Props> = ({ onClose, existing }) => {
         {/* Footer */}
         <div className="flex gap-3 p-5 border-t border-slate-100">
           <button onClick={onClose} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 uppercase tracking-widest hover:bg-slate-50 transition-all italic">Cancel</button>
-          <button onClick={handleSave} className="flex-1 flex items-center justify-center gap-2 bg-primary-950 text-white py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-md active:scale-95 transition-all italic">
+          {existing && (
+            <button onClick={() => handleSave(true)} className="flex-1 flex items-center justify-center gap-2 border border-primary-200 text-primary-700 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-primary-50 transition-all italic">
+              <Plus size={13} />Save as New
+            </button>
+          )}
+          <button onClick={() => handleSave(false)} className="flex-1 flex items-center justify-center gap-2 bg-primary-950 text-white py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-md active:scale-95 transition-all italic">
             <Save size={13} />{existing ? 'Update Template' : 'Save Template'}
           </button>
         </div>

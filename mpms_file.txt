@@ -1,0 +1,150 @@
+SECTION	Unnamed: 0	Unnamed: 1	PRESIDENTIAL PRIORITIES 13%	Unnamed: 3	Unnamed: 4	Unnamed: 5	Unnamed: 6	Unnamed: 7	Unnamed: 8	Unnamed: 9	MDA OPERATIONAL PRIORITIES 25%	Unnamed: 2	SERVICE-WIDE PRIORITIES 37%
+PRESIDENTIAL	1	Governance & Service Delivery	13	Strengthen and institutionalize the effective utilization of the Performance Management System (PMS) to enhance accountability, performance tracking, and service delivery outcomes across SERVICOM.	4	1	PMS Implementation Rate across Units 	1	Administration Unit 60%	Other Units - 40%			
+PRESIDENTIAL						1	Percentage of staff with completed and approved performance contract aligned to SERVICOM objectives.	1					
+PRESIDENTIAL						2	Percentage of performance reviews and appraisals completed within approved PMS timelines.	1					
+PRESIDENTIAL				Initiate and institutionalize the digitization of records and work processes to improve information management, workflow efficiency, and readiness for the  adoption of an Enterprise Content Management (ECM) system.	4	2	Percentage of Staff Trained on Digital Records and Workflow Management	0.5	"ICT - 50%
+Admin- 30%"	Other Units - 20%			
+PRESIDENTIAL						1	Percentage increase in the use of digital documentation and approval processes compared to baseline.	0.5					
+PRESIDENTIAL						1	Percentage of Transactions Processed Digitally	0.75					
+PRESIDENTIAL				Initiate and implement quarterly citizens and stakeholder engagement sessions to communicate SERVICOM activities and serve as a feedback mechanism.	4	4	Total number of quarterly  engagement sessions held with citizens and stakeholders	4	Operations Unit - 40%	"Administration Unit - 30%
+Public Awareness Unit- 30%"			
+PRESIDENTIAL				Promote disability inclusion and accessibility awareness within SERVICOM to ensure inclusive internal service processes, communication, and staff conduct.	1	0.5	Percentage of SERVICOM Staff Trained on Accessibility Practices and Disability Awareness	0.5	Administration Unit 40%	"Public Awareness (40%)
+Operations Unit (20%)
+"			
+PRESIDENTIAL						0.5	Percentage of SERVICOM public-facing information materials (service charters, feedback forms, website content, notices) available in accessible formats.	0.75					
+MDA OPERATIONAL		Service Delivery Monitoring, Evaluation, and Compliance		Conduct SERVICOM Compliance Evaluations (SCE) across MDAs to assess service delivery performance	1.5	0.5	Number of MDAs evaluated through SCE annually	30	OPERATIONS		1	10	
+MDA OPERATIONAL						0.5	Percentage of planned SCE exercises conducted as scheduled	1					
+MDA OPERATIONAL						0.5	Timeliness of completion of SCE assessments and reports	0.9					
+MDA OPERATIONAL				Present evaluation findings to MDAs to drive service improvement	1	0.5	Percentage of SCE reports presented to evaluated MDAs	1					
+MDA OPERATIONAL						0.5	Timeliness of presentation after completion of evaluations	0.9					
+MDA OPERATIONAL				Promote continuous performance improvement and accountability through engagement platforms	2	1	Number of breakfast meetings and networking seminars held	4					
+MDA OPERATIONAL						1	Level of participation by MDAs and service heads	0.9					
+MDA OPERATIONAL				Assess functionality and effectiveness of SERVICOM structures within MDAs	2	1	Number of MSU functionality evaluations conducted	20					
+MDA OPERATIONAL						1	Percentage of evaluated MSUs meeting minimum functionality standards	80					
+MDA OPERATIONAL				Sensitize MDAs and stakeholders on grievance redress and service standards	1	0.5	Number of GRM sensitization programmes conducted	6					
+MDA OPERATIONAL						0.5	Level of MDA participation in Customer Service Week	1					
+MDA OPERATIONAL				Support year-end performance review and institutional learning	1.5	0.75	Timely completion of end-of-year operational reports	1					
+MDA OPERATIONAL						0.75	Percentage of operational activities reviewed and documented	1					
+MDA OPERATIONAL				Facilitate  Service Chatered development	1	1	Percentage of MDAs with implementable Chatered	0.9					
+MDA OPERATIONAL		Administrative Services, Staff Welfare, and Office Support		Strengthen staff and nodal officers' engagements, planning, and organizational alignment	2	1	Percentage of scheduled staff retreat conducted annually	0.8	ADMIN		2	7	
+MDA OPERATIONAL						1	Percentage of nodal officersâ€™ meetings held as scheduled	0.8					
+MDA OPERATIONAL				Ensure availability and effective management of office logistics and assets	2	0.666666667	Percentage of office vehicles in functional condition	0.8					
+MDA OPERATIONAL						0.666666667	Percentage of office equipment serviceable as at when due	0.8					
+MDA OPERATIONAL						0.666666667	Average response time to maintenance requests	0.8					
+MDA OPERATIONAL				Ensure efficient records management and file movement	1	0.5	Percentage of file requests attended to without delay	0.8					
+MDA OPERATIONAL						0.5	Accuracy of file tracking and movement records	1					
+MDA OPERATIONAL				Ensure effective handling of office correspondence and mail dispatch	1	0.5	Percentage of incoming correspondence received and registered same day	0.9					
+MDA OPERATIONAL						0.5	Percentage of outgoing correspondence dispatched within timelines	0.8					
+MDA OPERATIONAL				Ensure efficient, transparent, and timely management of stores and inventory through proper custody, issuance, and replenishment of consumables and assets in support of uninterrupted administrative and operational activities within SERVICOM	1	0.5	Percentage of store items accurately recorded in the store ledger/inventory system	1					
+MDA OPERATIONAL						0.25	Percentage of items restocked within approved timelines after reaching reorder level	0.8					
+MDA OPERATIONAL						0.25	Percentage of store items with updated bin cards or inventory records	1					
+MDA OPERATIONAL		Public Awareness, Advocacy, and Citizen Engagement		Enhance public awareness and visibility of SERVICOMâ€™s mandate, programmes, and achievements	2.5	1.5	Number of press interviews, media appearances, and programme features conducted (TV, radio, print)	20	PUBLIC AWARENESS		3	7	
+MDA OPERATIONAL						1	Number of documentaries, jingles, and awareness materials produced and disseminated	5					
+MDA OPERATIONAL				Leverage digital platforms and social media to expand SERVICOMâ€™s outreach and impact	1	0.5	Growth rate of followers and engagement across SERVICOM social media platforms	0.2					
+MDA OPERATIONAL						0.5	Number of audio-visual advocacy materials produced and shared online	20					
+MDA OPERATIONAL				Promote transparency and accountability through publication of SERVICOM reports and evaluations	1	0.5	Number of SERVICOM evaluation reports published in national dailies	5					
+MDA OPERATIONAL						0.5	Timeliness of report dissemination	1					
+MDA OPERATIONAL				Improve internal capacity and productivity for effective media and publicity operations	1.5	1	Percentage Turnaround time for media coverage and content production	1					
+MDA OPERATIONAL						0.5	Availability and functionality of media and digital equipment	0.8					
+MDA OPERATIONAL				Support national and global service delivery initiatives and campaigns	1	0.5	Percentage of planned national and global service delivery campaigns successfully implemented	0.8					
+MDA OPERATIONAL						0.5	Percentage of MDAs that actively participated in Customer Service Week and related campaigns under SERVICOMâ€™s coordination	0.3					
+MDA OPERATIONAL		Financial Management, Budgeting, and Accounting Services		Prepare and manage SERVICOMâ€™s annual budget in line with approved financial regulations	1	0.5	Timely preparation and submission of annual budget	1	FINANCE AND ACCOUNT		4	5	
+MDA OPERATIONAL						0.5	Percentage of budget estimates prepared in line with approved guidelines	1					
+MDA OPERATIONAL				Ensure accurate financial record-keeping and proper retirement of advances	1	0.5	Percentage of advances retired within approved timelines	1					
+MDA OPERATIONAL						0.5	Percentage of vouchers with complete and accurate supporting documents	1					
+MDA OPERATIONAL				Ensure proper verification, processing, and payment of financial transactions	1	0.3	Percentage of payment vouchers verified and processed in line with approval	1					
+MDA OPERATIONAL						0.3	Percentage of payments effected based on duly approved memos	1					
+MDA OPERATIONAL						0.4	Average turnaround time for processing payment vouchers	1					
+MDA OPERATIONAL				Strengthen financial reporting and compliance with IPSAS (Accrual Basis)	2	1	Timely preparation and submission of annual financial statements	1					
+MDA OPERATIONAL						1	Level of compliance with IPSAS (Accrual) requirements	1					
+MDA OPERATIONAL		Internal Audit, Financial Control, and Compliance Assurance		Ensure timely audit, certification, and reporting of SERVICOM financial statements	1	0.3	Timely submission of annual, half-yearly, quarterly, and monthly audit reports	1	INTERNAL AUDIT		5	3	
+MDA OPERATIONAL						0.3	Percentage of statutory audit reports submitted within approved timelines	1					
+MDA OPERATIONAL						0.4	Compliance rate with reporting requirements of OAuGF and OAGF	1					
+MDA OPERATIONAL				Strengthen pre-payment and post-payment audit controls	0.7	0.35	Percentage of payment vouchers subjected to pre-payment audit	1					
+MDA OPERATIONAL						0.35	Percentage of post-payment audits conducted as scheduled	1					
+MDA OPERATIONAL				Conduct routine and periodic audit of financial records and transactions	0.5	0.2	Percentage of monthly audits completed as planned	1					
+MDA OPERATIONAL						0.3	Number of quarterly audit reviews conducted across departments	4					
+MDA OPERATIONAL				Evaluate the effectiveness of internal controls and safeguard government assets	0.5	0.25	Percentage of capital assets audited quarterly	1					
+MDA OPERATIONAL						0.25	Percentage of audit recommendations implemented by management	1					
+MDA OPERATIONAL				Ensure proper auditing of revenue collection and remittance	0.3	0.15	Percentage of revenue collections audited	1					
+MDA OPERATIONAL						0.15	Percentage of revenue remitted in full and on time	1					
+MDA OPERATIONAL		ICT Governance, Digital Transformation, & Information Security		"Strengthen ICT governance and policy alignment in line with national frameworks
+(NDES, NITDA Guidelines, NDPR, Civil Service Reform & e-Government Agenda)"	1	0.3	Level of compliance with NITDA and NDPR requirements	1	ICT 		6	5	
+MDA OPERATIONAL						0.3	Percentage completion of ICT asset verification and inventory update	1					
+MDA OPERATIONAL						0.4	Percentage of ICT and data protection policies reviewed, updated, and approved	0.8					
+MDA OPERATIONAL				"Upgrade and maintain reliable ICT infrastructure to support operations
+(Networks, equipment, servers, power, backups)"	1	0.5	System and network uptime percentage	0.9					
+MDA OPERATIONAL						0.5	Percentage of planned ICT infrastructure upgrades completed	0.75					
+MDA OPERATIONAL				Enhance ICT service delivery and user support through an effective helpdesk	1	0.5	Percentage of ICT service requests resolved within agreed SLA	0.9					
+MDA OPERATIONAL						0.5	User satisfaction rate with ICT support services	0.8					
+MDA OPERATIONAL				Strengthen cybersecurity and data protection compliance	1	0.5	Percentage of cybersecurity audits and vulnerability assessments conducted	0.9					
+MDA OPERATIONAL						0.5	Percentage compliance with NDPR requirements	1					
+MDA OPERATIONAL				Monitor, evaluate, and sustain ICT performance	1	0.5	Timely production of annual ICT performance report	1					
+MDA OPERATIONAL						0.5	Percentage of ICT deliverables achieved against annual workplan	0.8					
+MDA OPERATIONAL		MDA-wide Staff Development, Training, and Capacity Enhancement		Identify capacity gaps and establish training priorities across SERVICOM and MDAs	1	0.7	Percentage of MDAs/staff covered by the Training Needs Assessment (TNA)	0.8	SETVICOM INSTITUTE		7	5	
+MDA OPERATIONAL						0.3	Timely completion of Annual Training Needs Assessment Report	1					
+MDA OPERATIONAL				Strengthen foundational competencies and ensure compliance with public service standards	1	0.5	Percentage of newly recruited or transferred MDA staff inducted	1					
+MDA OPERATIONAL						0.5	Percentage of eligible officers completing supervisory/leadership training	0.8					
+MDA OPERATIONAL				Build specialized, technical, and performance-driven competencies	0.5	0.5	Number of specialized and technical training programmes conducted across MDAs	10					
+MDA OPERATIONAL					0.5	0.5	Percentage of targeted MDA staff completing specialized/professional training	0.8					
+MDA OPERATIONAL				Institutionalize learning, knowledge sharing, and best practice dissemination	1	0.5	Number of training manuals and learning materials developed or updated	5					
+MDA OPERATIONAL						0.5	Number of knowledge-sharing workshops conducted across MDAs	10					
+MDA OPERATIONAL				Evaluate training impact and measure improvement in service delivery	1	0.8	Percentage of training programmes evaluated post-delivery	0.8					
+MDA OPERATIONAL						0.2	Percentage improvement in staff performance indicators after training	0.2					
+MDA OPERATIONAL		Executive Administration, Secretariat and Strategic Support		Provide effective administrative and secretarial support to the National Coordinator	1	0.5	Percentage of correspondence (incoming and outgoing) processed within approved timelines	1	OPERATIONS		8	3	
+MDA OPERATIONAL						0.5	Percentage of meetings supported with complete documentation (agenda, minutes, briefs)	1					
+MDA OPERATIONAL				Ensure efficient coordination and scheduling of the National Coordinatorâ€™s official activities	0.7	0.35	Percentage of official engagements properly scheduled and documented	1					
+MDA OPERATIONAL						0.35	Percentage of meetings/events attended as scheduled	1					
+MDA OPERATIONAL				Strengthen records management and document control for executive decisions	0.3	0.2	Percentage of executive files properly registered, tracked, and archived	1					
+MDA OPERATIONAL						0.1	Percentage of documents retrievable within agreed time standards	1	OPERATIONS				
+MDA OPERATIONAL				Support effective internal coordination between the National Coordinator and SERVICOM units	0.5	0.5	Percentage of directives from the National Coordinator communicated to relevant units within timelines	1					
+MDA OPERATIONAL				Provide clerical and logistical support for high-level meetings, engagements, and events	0.5	0.5	Percentage of high-level meetings/events supported without logistical lapses	1					
+SERVICE WIDE	1			Strengthen a culture of innovation and technology adoption within SERVICOM by identifying, piloting, and implementing service-improvement initiatives, while actively promoting staff participation in the OHCSF Innovation Challenge.	5	2	Number of Innovation, Initiative, and Technology Ideas Generated	5	ICT, 70%	Other Units - 30%		5	Service Innovation And Improvement
+SERVICE WIDE						2	Percentage of Identified Innovations and Initiatives Implemented or Piloted	0.1					
+SERVICE WIDE						1	Number of SERVICOM Staff Participating in the OHCSF Innovation Challenge	2					
+SERVICE WIDE	2			Strengthen internal stakeholder engagement within SERVICOM by improving communication, collaboration, and coordination among units to enhance teamwork and organizational effectiveness.	5	3	Number of structured inter-unit meetings, workshops, or knowledge-sharing sessions held during the year.	5	"Operations Unit - 40%
+"	"Administration Unit - 25%
+Public Awareness Unit- 25%
+ICT - 10%"		5	Stakeholder Engagement (MDA)
+SERVICE WIDE						2	Number of Cross-Unit Collaboration Initiatives Implemented	5	"Operations Unit - 40%
+"	"Administration Unit - 30%
+Public Awareness Unit- 30%"			
+SERVICE WIDE	3			Identify, prioritize, and automate key service delivery processes, forms, and routine tasks, while standardizing the use of official email communication to improve efficiency, accuracy, transparency, and accountability across SERVICOM.	5	1	Number of Processes, Forms, and Tasks Identified for Automation	5	"ICT- 40%
+Other  Units - 60%"			5	Automated Service Delivery
+SERVICE WIDE						2	Percentage of Identified Processes and Forms Automated or Digitized	0.2	"ICT- 40%
+Other  Units - 60%"				
+SERVICE WIDE						2	Percentage of Staff Actively Using Official Email for Work-Related Communication	0.8	"ICT- 40%
+Other  Units - 60%"				
+SERVICE WIDE	4			Enhance the skills, competencies, and knowledge of SERVICOM staff through training, induction, and orientation, ensuring excellent service delivery, adoption of best practices, and seamless integration of new, transferred, and promoted staff within their respective units.	5	3	Percentage of all staff trained on service delivery standards, best practices, and functional skills	0.8	"Administration- 80%
+"	OTHER UNITS - 20%		5	Capacity Building
+SERVICE WIDE						2	Percentage of new, transferred, and promoted staff successfully inducted/oriented within 30 days of joining, transfer, or promotion	0.8	"Administration- 80%
+"	OTHER UNITS - 20%			
+SERVICE WIDE	5			Ensure the efficient and effective implementation of services and programmes within SERVICOM and streamline payment processes to guarantee that payments and staff claims are processed and disbursed within required timelines, thereby optimizing financial efficiency and reducing delays	4	2	Percentage of services and programmes implemented within approved timelines	1	FINANCE AND ACCOUNT	INTERNAL AUDIT		7	Support For Service Delivery
+SERVICE WIDE						2	Percentage of payments and staff claims processed within the required timeline	1	FINANCE AND ACCOUNT	INTERNAL AUDIT			
+SERVICE WIDE				Strengthen regulatory compliance within the SERVICOM by implementing robust financial control measures to prevent and eliminate cases of fraud, irregularities, and non-adherence to financial regulations and government policies.	3	3	Percentage compliance with financial regulations and government policies	1	ALL UNITS				
+SERVICE WIDE	6			Promote staff welfare, motivation, and recognition	6	2	Percentage of staff benefiting from welfare packages	0.8	Administration - 100%			10	Staff Welfare
+SERVICE WIDE						1	Timely delivery of welfare items and cash tokens	0.8	Administration - 100%				
+SERVICE WIDE						1	Number of recognition and award programmes conducted	5	Administration - 100%				
+SERVICE WIDE						2	Staff satisfaction level with welfare and recognition initiatives	0.7	Administration - 80%	"
+Other Units  - 20%
+"			
+SERVICE WIDE				Promote work-life balance, wellness, and staff health	4	2	Staff participation rate in wellness programmes	0.5	Administration - 80%	"
+Other Units  - 20%
+"			
+SERVICE WIDE						2	Number of wellness and fitness sessions conducted	5	Administration - 100%				
+PROCUREMENT		Procurement and Contract Management		Ensure transparent, efficient, and compliant procurement processes that support timely acquisition of goods, works, and services to enhance effective service delivery in SERVICOM.	3	0.375	Percentage of annual procurement plan developed and approved within first quarter	1	PROCUREMENT		1	3	
+PROCUREMENT						0.375	Percentage of procurement processes compliant with procurement regulations	1					
+PROCUREMENT						0.375	Percentage of procurement requests processed within approved timelines	0.9					
+PROCUREMENT						0.375	Percentage of procurement processes conducted using approved procurement methods	0.9					
+PROCUREMENT						0.375	Percentage of procurement records properly documented and retrievable	0.8					
+PROCUREMENT						0.375	Percentage of contracts executed in accordance with agreed terms and timelines	1					
+PROCUREMENT						0.375	Percentage of procurement requests supported with appropriate procurement guidance	1					
+PROCUREMENT						0.375	Percentage of procurement activities conducted without audit queries or compliance issues	1					
+LEGAL		Legal Advisory and Compliance Services		Provide legal advisory services and ensure compliance with applicable laws and regulations to safeguard SERVICOMâ€™s operations and interests.	2	0.25	Percentage of requests for legal advice responded to within specified timelines	1	LEGAL		1	2	
+LEGAL						0.25	Percentage of contracts and agreements reviewed before execution	1					
+LEGAL						0.25	Percentage of SERVICOM activities compliant with applicable legal and regulatory requirements	0.9					
+LEGAL						0.25	Percentage of legal documents prepared accurately and within required timelines	0.9					
+LEGAL						0.25	Percentage of legal records properly maintained and easily retrievable	0.8					
+LEGAL						0.25	Percentage of procurement and administrative processes reviewed for legal compliance	1					
+LEGAL						0.25	Percentage of identified legal risks addressed with appropriate legal advice	1					
+  						0.25	Percentage of legal issues handled in accordance with legal procedures and timelines	1					

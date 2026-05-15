@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   UserCircle, 
@@ -17,6 +17,7 @@ import {
   Command,
   Globe,
   Target,
+  Clock,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
@@ -53,7 +54,7 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, badge, isActive, onC
       )}>
         {icon}
       </span>
-      <span className={cn("text-[11px] uppercase tracking-[0.2em] font-black italic", isActive ? "text-white" : "text-slate-500")}>{label}</span>
+      <span className={cn("text-[11px] uppercase tracking-[0.15em] font-black", isActive ? "text-white" : "text-slate-500")}>{label}</span>
     </div>
     {badge !== undefined && badge > 0 && (
       <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
@@ -77,6 +78,7 @@ interface SidebarNavItem {
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const isSupervisor = user && [
@@ -92,6 +94,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     { to: '/', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
     { to: '/my-appraisal', icon: <UserCircle size={20} />, label: 'My Appraisal' },
     { to: '/my-contract', icon: <FileText size={20} />, label: 'Performance Contract' },
+    { to: '/monthly-review', icon: <Clock size={20} />, label: 'Monthly Review' },
+    { to: '/profile', icon: <UserCircle size={20} />, label: 'My Profile' },
   ];
 
   const appraiserItems: SidebarNavItem[] = [];
@@ -130,15 +134,15 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <img src="/servicom_logo.png" alt="SERVICOM" className="w-full h-full object-contain" />
             </div>
             <div>
-              <h1 className="font-black text-primary-950 tracking-tighter leading-none text-2xl italic uppercase">SERVICOM</h1>
-              <p className="text-[10px] text-primary-500 font-black uppercase tracking-[0.3em] mt-1.5 italic opacity-60">ePMS Portal</p>
+              <h1 className="font-black text-primary-950 tracking-tighter leading-none text-2xl uppercase">SERVICOM</h1>
+              <p className="text-[10px] text-primary-500 font-black uppercase tracking-[0.3em] mt-1.5 opacity-60">ePMS Portal</p>
             </div>
           </div>
         </div>
 
         <nav className="flex-1 px-6 space-y-8 overflow-y-auto pb-4 scrollbar-hide">
           <div className="space-y-4">
-            <p className="px-2 text-[9px] font-black text-slate-400 uppercase tracking-[0.25em]">Appraisal</p>
+            <p className="px-2 text-[11px] font-black text-slate-400 uppercase tracking-[0.25em]">Appraisal</p>
             <div className="space-y-1">
               {appraiseeItems.map((item) => (
                 <NavItem 
@@ -152,7 +156,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
           {appraiserItems.length > 0 && (
             <div className="space-y-4">
-              <p className="px-2 text-[9px] font-black text-slate-400 uppercase tracking-[0.25em]">Management</p>
+              <p className="px-2 text-[11px] font-black text-slate-400 uppercase tracking-[0.25em]">Management</p>
               <div className="space-y-1">
                 {appraiserItems.map((item) => (
                   <NavItem 
@@ -167,7 +171,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
           {mpmsItems.length > 0 && (
             <div className="space-y-4">
-              <p className="px-2 text-[9px] font-black text-slate-400 uppercase tracking-[0.25em]">Institutional MPMS</p>
+              <p className="px-2 text-[11px] font-black text-slate-400 uppercase tracking-[0.25em]">Institutional MPMS</p>
               <div className="space-y-1">
                 {mpmsItems.map((item) => (
                   <NavItem 
@@ -181,7 +185,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           )}
 
           <div className="space-y-4">
-            <p className="px-2 text-[9px] font-black text-slate-400 uppercase tracking-[0.25em]">System</p>
+            <p className="px-2 text-[11px] font-black text-slate-400 uppercase tracking-[0.25em]">System</p>
             <div className="space-y-1">
               {systemItems.map((item) => (
                 <NavItem 
@@ -214,7 +218,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <img src="/servicom_logo.png" alt="SERVICOM" className="w-full h-full object-contain" />
             </div>
             <div>
-              <span className="font-black text-primary-950 tracking-tighter uppercase italic leading-none block">SERVICOM</span>
+              <span className="font-black text-primary-950 tracking-tighter uppercase leading-none block">SERVICOM</span>
               <span className="text-[8px] text-primary-500 font-black uppercase tracking-widest mt-0.5 opacity-60">Mobile Unit</span>
             </div>
          </div>
@@ -236,11 +240,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             ))}
             <div className="pt-4 border-t border-slate-100 mt-4">
               <div className="flex items-center gap-3 px-4 py-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-primary-950 flex items-center justify-center text-white font-black text-lg italic">
+                <div className="w-10 h-10 rounded-xl bg-primary-950 flex items-center justify-center text-white font-black text-lg">
                   {user?.firstname[0]}
                 </div>
                 <div>
-                  <p className="text-sm font-black text-slate-900 uppercase italic tracking-tight">{user?.firstname} {user?.surname}</p>
+                  <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{user?.firstname} {user?.surname}</p>
                   <p className="text-[10px] font-black text-primary-500 uppercase tracking-widest opacity-60">{user?.role}</p>
                 </div>
               </div>
@@ -265,7 +269,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                <input 
                   type="text" 
                   placeholder="Global Directory Search..." 
-                  className="w-full bg-slate-50 border border-transparent rounded-[24px] pl-14 pr-14 py-4 text-[13px] font-black italic uppercase tracking-widest text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-primary-100 focus:ring-4 focus:ring-primary-950/5 transition-all outline-none shadow-inner"
+                  className="w-full bg-slate-50 border border-transparent rounded-[24px] pl-14 pr-14 py-4 text-sm font-black uppercase tracking-widest text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-primary-100 focus:ring-4 focus:ring-primary-950/5 transition-all outline-none shadow-inner"
                />
                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 bg-white border border-slate-200 rounded-lg shadow-sm">
                   <Command size={10} className="text-slate-400" />
@@ -276,7 +280,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <div className="h-6 w-px bg-slate-200" />
 
             <div>
-              <h2 className="text-2xl font-black text-primary-950 uppercase tracking-tighter italic leading-none">
+              <h2 className="text-2xl font-black text-primary-950 uppercase tracking-tighter leading-none">
                 {allNavItems.find(item => item.to === location.pathname || (item.to !== '/' && location.pathname.startsWith(item.to)))?.label || 'Dashboard'}
               </h2>
             </div>
@@ -289,13 +293,15 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
              <div className="h-10 w-px bg-slate-100" />
 
-             <div className="flex items-center gap-5 group cursor-pointer pl-4 py-1.5 pr-1.5 bg-slate-50/50 rounded-[24px] border border-slate-100/50 hover:bg-white hover:border-primary-100 transition-all shadow-sm">
+             <div className="flex items-center gap-5 group cursor-pointer pl-4 py-1.5 pr-1.5 bg-slate-50/50 rounded-[24px] border border-slate-100/50 hover:bg-white hover:border-primary-100 transition-all shadow-sm"
+               onClick={() => navigate('/profile')}
+             >
                 <div className="text-right hidden xl:block">
-                   <p className="text-[13px] font-black text-slate-900 leading-none uppercase italic tracking-tight">{user?.firstname} {user?.surname}</p>
-                   <p className="text-[10px] font-black text-primary-500 uppercase tracking-widest mt-1.5 italic opacity-60 leading-none">{user?.role}</p>
+                   <p className="text-sm font-black text-slate-900 leading-none uppercase tracking-tight">{user?.firstname} {user?.surname}</p>
+                   <p className="text-[11px] font-black text-primary-500 uppercase tracking-widest mt-1.5 opacity-60 leading-none">{user?.role}</p>
                 </div>
                 <div className="relative">
-                   <div className="w-12 h-12 rounded-[18px] bg-primary-950 flex items-center justify-center text-white font-black text-xl italic shadow-heavy shadow-primary-950/20 group-hover:scale-105 transition-transform overflow-hidden border-2 border-white">
+                   <div className="w-12 h-12 rounded-[18px] bg-primary-950 flex items-center justify-center text-white font-black text-xl shadow-heavy shadow-primary-950/20 group-hover:scale-105 transition-transform overflow-hidden border-2 border-white">
                       {user?.avatarUrl ? (
                          <img src={user.avatarUrl} alt={user.surname} className="w-full h-full object-cover" />
                       ) : (

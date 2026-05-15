@@ -1,24 +1,34 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { LogIn, Shield, Mail, Lock } from 'lucide-react';
+import { LogIn, Shield, Mail, Lock, Loader } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 export const Login: React.FC = () => {
   const { signIn } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError]       = useState('');
+
+  // Prefetch Dashboard chunk to speed up transition after login
+  const prefetchDashboard = () => {
+    import('./Dashboard').catch(() => {});
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate login
-    setTimeout(async () => {
-      await signIn(email);
-      setIsLoading(false);
+    setError('');
+    try {
+      await signIn(email, password);
       navigate('/');
-    }, 1000);
+    } catch (err: any) {
+      setError(err.message ?? 'Login failed. Check your credentials.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -36,8 +46,8 @@ export const Login: React.FC = () => {
                  <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center">
                     <img src="/servicom_logo.png" alt="SERVICOM" className="w-full h-full object-contain drop-shadow-md" />
                  </div>
-                 <h1 className="text-2xl font-black text-slate-900 tracking-tighter uppercase italic">SERVICOM PMS</h1>
-                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1.5 italic">Performance Management System</p>
+                 <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">SERVICOM PMS</h1>
+                 <p className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] mt-1.5">Performance Management System</p>
               </div>
 
               <div className="p-8">
@@ -51,6 +61,7 @@ export const Login: React.FC = () => {
                              required
                              value={email}
                              onChange={(e) => setEmail(e.target.value)}
+                             onFocus={prefetchDashboard}
                              placeholder="name@servicom.gov.ng"
                              className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all font-sans"
                           />
@@ -58,24 +69,32 @@ export const Login: React.FC = () => {
                     </div>
 
                     <div className="space-y-2">
-                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Password</label>
+                       <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">Password</label>
                        <div className="relative">
                           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                           <input 
                              type="password" 
                              placeholder="••••••••"
+                             value={password}
+                             onChange={e => setPassword(e.target.value)}
+                             required
                              className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all font-sans"
                           />
                        </div>
                     </div>
 
+                    {error && (
+                      <p className="text-xs font-black text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-2">{error}</p>
+                    )}
+
                     <button 
                        type="submit"
                        disabled={isLoading}
-                       className="w-full bg-primary-950 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-primary-900 transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-primary-950/20"
+                       onMouseEnter={prefetchDashboard}
+                       className="w-full bg-primary-950 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-primary-900 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-primary-950/20"
                     >
                        {isLoading ? (
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <Loader className="w-5 h-5 animate-spin text-white" />
                        ) : (
                           <>
                              <LogIn size={20} />
@@ -89,7 +108,7 @@ export const Login: React.FC = () => {
                     <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 flex-shrink-0">
                        <Shield size={16} />
                     </div>
-                    <p className="text-[10px] text-slate-400 leading-tight">
+                    <p className="text-xs text-slate-400 leading-tight">
                        By signing in, you agree to the SERVICOM data privacy policy and performance management guidelines.
                     </p>
                  </div>

@@ -1,5 +1,12 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { 
+  calculateRawScore, 
+  calculateWeightedRawScore, 
+  calculateSection4Composite,
+  calculateAppraisalRating,
+  calculateAppraiserScore 
+} from '../lib/scoring';
 import { useNotifications } from '../context/NotificationContext';
 import { 
   ChevronRight, 
@@ -28,7 +35,8 @@ import {
   Trash2 as TrashIcon,
   Mail,
   Fingerprint,
-  BarChart3
+  BarChart3,
+  Activity
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Card, CardHeader } from '../components/ui/Card';
@@ -48,8 +56,6 @@ import {
 } from '../constants';
 
 // ── Signature persistence hook ────────────────────────────────────────────────
-// Stores the user's signature as a base64 data URL in localStorage keyed by IPPIS.
-// Once uploaded it is reused across all future appraisals automatically.
 const SIG_KEY = (ippisNo: string) => `sig_${ippisNo}`;
 
 function useSignature(ippisNo: string) {
@@ -96,7 +102,6 @@ export const AppraisalForm: React.FC = () => {
   const sigInputRef = useRef<HTMLInputElement>(null);
   const [sigDragOver, setSigDragOver] = useState(false);
 
-  // Process uploaded file → base64, crop whitespace via canvas, store
   const processSigFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) {
       addNotification('error', 'Invalid File', 'Please upload an image file (PNG, JPG, or GIF).');
@@ -107,7 +112,6 @@ export const AppraisalForm: React.FC = () => {
       const src = e.target?.result as string;
       const img = new Image();
       img.onload = () => {
-        // Draw onto canvas with white background, then export as PNG
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
@@ -115,7 +119,6 @@ export const AppraisalForm: React.FC = () => {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0);
-        // JPEG at 0.7 quality is ~5-10x smaller than PNG for signatures
         saveSig(canvas.toDataURL('image/jpeg', 0.7));
         addNotification('success', 'Signature Saved', 'Your signature has been saved and will be used for all future appraisals.');
       };
@@ -131,28 +134,24 @@ export const AppraisalForm: React.FC = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Available appraisal periods — in production these come from AdminSettings config
   const APPRAISAL_PERIODS = [
     { label: 'Q1 (January - March 2026)', value: 'Q1-2026' },
     { label: 'Q2 (April - June 2026)', value: 'Q2-2026' },
     { label: 'Q3 (July - September 2026)', value: 'Q3-2026' },
     { label: 'Q4 (October - December 2026)', value: 'Q4-2026' },
   ];
-  const [selectedPeriod, setSelectedPeriod] = useState(APPRAISAL_PERIODS[1]); // default Q2
+  const [selectedPeriod, setSelectedPeriod] = useState(APPRAISAL_PERIODS[1]);
 
   const [activeTemplate, setActiveTemplate] = useState<PerformanceTemplate>(templates[0] ?? PERFORMANCE_TEMPLATES[0]);
 
   React.useEffect(() => {
-    // Gap 1 fix: load from snapshotted KRAs, not live template
     const savedContract = localStorage.getItem(`active_contract_${user?.ippisNo}`);
     if (savedContract) {
        const contract = JSON.parse(savedContract);
        if (contract.kras) {
-         // Use the locked snapshot — immune to template edits
          setActiveTemplate(prev => ({ ...prev, kras: contract.kras }));
          addNotification('info', 'Contract Loaded', `Appraisal loaded from approved contract (ID: ${contract.id})`);
        } else if (contract.templateId) {
-         // Fallback for old contracts saved before snapshot fix — search live templates first
          const template = templates.find(t => t.id === contract.templateId) ?? PERFORMANCE_TEMPLATES.find(t => t.id === contract.templateId);
          if (template) setActiveTemplate(template);
        }
@@ -161,7 +160,6 @@ export const AppraisalForm: React.FC = () => {
     return () => clearTimeout(timer);
   }, [user, addNotification]);
   
-  // Section 1: Employee Info — read-only, derived from auth context (Gap 2 fix)
   const employeeInfo = {
     name: `${user?.surname ?? ''} ${user?.firstname ?? ''}`.trim(),
     ippisNo: user?.ippisNo ?? '',
@@ -172,8 +170,6 @@ export const AppraisalForm: React.FC = () => {
     period: selectedPeriod.label,
   };
 
-  // Section 2: Supervisor Info — read-only from org hierarchy
-  // In production resolved via API from user.supervisorId; using mock lookup here
   const SUPERVISOR_LOOKUP: Record<string, { name: string; designation: string; email: string }> = {
     'lead_1': { name: 'OLEH NNEKA', designation: 'Team Lead', email: 'lead@servicom.gov.ng' },
     'head_1': { name: 'NAWABUA CHINYERE', designation: 'Head of Department', email: 'head@servicom.gov.ng' },
@@ -188,12 +184,12 @@ export const AppraisalForm: React.FC = () => {
   const supervisorInfo = SUPERVISOR_LOOKUP[user?.supervisorId ?? ''] ?? { name: 'Not Assigned', designation: '—', email: '—' };
   const counterSigningInfo = COUNTER_SIGNER_LOOKUP[user?.counterSignerId ?? ''] ?? { name: 'Not Assigned', designation: '—', email: '—' };
   
-  // Section 7: Comments State
   const [comments, setComments] = useState({
     appraiserRating: '',
     appraiseeComments: '',
     supervisorComments: '',
     counterSupervisorComments: '',
+    staffAppeal: '',
     appraiseeSigned: false,
     supervisorSigned: false,
     counterSigned: false
@@ -224,7 +220,6 @@ export const AppraisalForm: React.FC = () => {
     return config;
   });
 
-  // Effect to update configs when template changes (on sync)
   React.useEffect(() => {
     const config: any = {};
     activeTemplate.kras.forEach(kra => {
@@ -241,7 +236,6 @@ export const AppraisalForm: React.FC = () => {
     });
     setKpiConfigs(config);
     
-    // Also update weights
     const w: Record<string, number> = {};
     activeTemplate.kras.forEach(kra => {
       w[kra.id] = kra.weight;
@@ -275,15 +269,11 @@ export const AppraisalForm: React.FC = () => {
     }));
   };
   
-  // Gap 6 fix: separate cluster-level weights from item-level weights
-  // Cluster weights must sum to 20 (the Section 5 allocation)
-  // Cluster weights derived from DEFAULT_COMPETENCIES (must sum to 20)
   const [clusterWeights, setClusterWeights] = useState<Record<string, number>>({
     'Generic': 9,
     'Functional': 7,
     'Ethics & Values': 4,
   });
-  // Item weights derived from DEFAULT_COMPETENCIES targets
   const [compWeights, setCompWeights] = useState<Record<string, number>>(() => {
     const weights: Record<string, number> = {};
     DEFAULT_COMPETENCIES.forEach(cluster => {
@@ -298,12 +288,10 @@ export const AppraisalForm: React.FC = () => {
 
   const competencyData = useMemo(() => DEFAULT_COMPETENCIES, []);
 
-  // Validation: cluster weights must sum to 20
   const totalClusterWeight = useMemo(() => {
     return Object.values(clusterWeights).reduce((a: number, b: number) => a + b, 0);
   }, [clusterWeights]);
 
-  // Validation: each cluster's item weights must sum to the cluster weight
   const clusterValidation = useMemo(() => {
     const report: Record<string, { sum: number; target: number; valid: boolean }> = {};
     competencyData.forEach(c => {
@@ -333,9 +321,8 @@ export const AppraisalForm: React.FC = () => {
 
   const calculateScores = (targetAchievements: Record<string, number>) => {
     const kpiItems: Record<string, { raw: number; weighted: number; grade: string; gradedWeight: number }> = {};
-    let section4RawTotal = 0; // Sum out of 100
+    let section4RawTotal = 0;
 
-    // 1. Calculate total weight of all KPIs in Section 4 to determine the normalization scale
     let totalSection4Weight = 0;
     activeTemplate.kras.forEach(kra => {
       kra.objectives.forEach(obj => {
@@ -346,7 +333,6 @@ export const AppraisalForm: React.FC = () => {
       });
     });
 
-    // 2. Normalization factor to reach 100 points as per Excel "Graded Weight" column
     const scaleFactor = totalSection4Weight > 0 ? (100 / totalSection4Weight) : 0;
 
     activeTemplate.kras.forEach(kra => {
@@ -361,11 +347,6 @@ export const AppraisalForm: React.FC = () => {
           
           let grade = 'P';
           let raw = 0;
-
-          // Excel formula: 
-          // IF(P19<N19,50, IF(P19<M19,60, IF(P19<L19,70, IF(P19<K19,80, 
-          // IF(ISNUMBER(J19), IF(P19<J19,IF(P19>=K19,90,80),100), IF(P19=K19,90,100) ))))))
-          // J19=O, K19=E, L19=VG, M19=G, N19=F
           
           const oVal = parseCriteria(criteria.O);
           const eVal = parseCriteria(criteria.E);
@@ -382,50 +363,30 @@ export const AppraisalForm: React.FC = () => {
             else if (val < vgVal) { grade = 'G'; raw = 70; }
             else if (val < eVal) { grade = 'VG'; raw = 80; }
             else {
-              // Handle O (Outstanding)
               if (typeof criteria.O === 'number') {
-                if (val < oVal) {
-                  grade = 'E';
-                  raw = 90;
-                } else {
-                  grade = 'O';
-                  raw = 100;
-                }
+                if (val < oVal) { grade = 'E'; raw = 90; } else { grade = 'O'; raw = 100; }
               } else {
-                // If O is not a number (e.g. ">100" or empty), use E as 90/100 threshold
-                if (val === eVal) {
-                  grade = 'E';
-                  raw = 90;
-                } else {
-                  grade = 'O';
-                  raw = 100;
-                }
+                if (val === eVal) { grade = 'E'; raw = 90; } else { grade = 'O'; raw = 100; }
               }
             }
           } else {
-            // Reverse logic for 'lower' direction (e.g. Turnaround Time)
             if (val > fVal) { grade = 'P'; raw = 50; }
             else if (val > gVal) { grade = 'F'; raw = 60; }
             else if (val > vgVal) { grade = 'G'; raw = 70; }
             else if (val > eVal) { grade = 'VG'; raw = 80; }
             else {
               if (typeof criteria.O === 'number') {
-                if (val > oVal) { grade = 'E'; raw = 90; }
-                else { grade = 'O'; raw = 100; }
+                if (val > oVal) { grade = 'E'; raw = 90; } else { grade = 'O'; raw = 100; }
               } else {
-                if (val === eVal) { grade = 'E'; raw = 90; }
-                else { grade = 'O'; raw = 100; }
+                if (val === eVal) { grade = 'E'; raw = 90; } else { grade = 'O'; raw = 100; }
               }
             }
           }
           
-          // Excel logic: Use pre-calculated gradedWeight from template if available,
-          // otherwise fallback to dynamic scaling based on scaleFactor.
           const kpiWt = (kpi as any).weight || (kriWeights[obj.id] / obj.kpis.length) || 0;
           const gradedWeight = (kpi as any).gradedWeight || 
                              ((obj as any).gradedWeight ? ((obj as any).gradedWeight / obj.kpis.length) : (kpiWt * scaleFactor));
           
-          // Weighted Raw Score = (Graded Weight * Raw Score) / 100
           const weighted = (gradedWeight * raw) / 100;
           
           kpiItems[kpi.id] = { raw, weighted, grade, gradedWeight };
@@ -434,10 +395,8 @@ export const AppraisalForm: React.FC = () => {
       });
     });
 
-    // Final Section 4 Score is scaled to 70%
     const kpiTotal = (section4RawTotal / 100) * 70;
 
-    // Competency Score (20%)
     let compTotal = 0;
     competencyData.forEach(cluster => {
       cluster.items.forEach(item => {
@@ -447,7 +406,6 @@ export const AppraisalForm: React.FC = () => {
       });
     });
 
-    // Ops Score (10%)
     let opsPointsTotal = 0;
     DEFAULT_OPERATIONS_ITEMS.forEach(item => {
       opsPointsTotal += targetAchievements[`op_${item.name}`] || 0;
@@ -482,7 +440,6 @@ export const AppraisalForm: React.FC = () => {
     }
 
     try {
-      // Gap 3 fix: write to shared AppraisalContext so TeamReview can read it
       submitAppraisal({
         id: `APR-${user?.ippisNo}-${selectedPeriod.value}-${Date.now()}`,
         userId: user?.id ?? '',
@@ -511,7 +468,6 @@ export const AppraisalForm: React.FC = () => {
 
       setIsSubmitted(true);
       addNotification('success', 'Appraisal Submitted', `Your ${selectedPeriod.label} appraisal has been submitted to ${supervisorInfo.name}.`);
-      // Notify the supervisor in real-time so their bell lights up immediately
       if (user?.supervisorId) {
         notifyUser(
           user.supervisorId,
@@ -590,32 +546,30 @@ export const AppraisalForm: React.FC = () => {
 
   return (
     <div className="w-full max-w-[1800px] mx-auto space-y-4 pb-24">
-      {/* Header & Stepper Section - Significantly More Compact */}
       <Card className="p-2 lg:p-3 sticky top-16 lg:top-[72px] z-40 overflow-hidden">
-        {/* Top Header */}
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2 px-1">
           <div className="flex items-center gap-2">
             <div className="w-1 h-4 bg-primary-600 rounded-full" />
             <div>
-              <h1 className="text-sm font-black text-slate-900 tracking-tighter leading-none uppercase italic">Appraisal Portal</h1>
-              <p className="text-slate-400 font-black text-[8px] uppercase tracking-[0.2em] leading-none mt-0.5 italic">Performance Management System</p>
+              <h1 className="text-xl font-black text-slate-900 tracking-tighter leading-none uppercase">Appraisal Portal</h1>
+              <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] leading-none mt-1">Performance Management System</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <div className="text-right hidden md:block">
-              <p className="text-[7px] uppercase tracking-widest text-slate-400 font-black mb-0.5 leading-none">Active Period</p>
-              <p className="text-[11px] font-black text-slate-900 uppercase italic">Q2 2026 Appraisal</p>
+              <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black mb-0.5 leading-none">Active Period</p>
+              <p className="text-[13px] font-black text-slate-900 uppercase">Q2 2026 Appraisal</p>
             </div>
             
             <div className="flex items-center gap-1.5 border-l border-slate-100 pl-3">
-                <button 
-                  onClick={quickFill}
-                  className="flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-600 rounded-lg font-bold text-[8px] hover:bg-amber-100 transition-all border border-amber-100 uppercase tracking-tight"
-                >
-                  <Zap size={9} />
-                  <span>Quick Fill</span>
-                </button>
+                  <button 
+                    onClick={quickFill}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 text-amber-600 rounded-lg font-bold text-[10px] hover:bg-amber-100 transition-all border border-amber-100 uppercase tracking-tight"
+                  >
+                    <Zap size={9} />
+                    <span>Quick Fill</span>
+                  </button>
 
                 <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50/50 rounded-full border border-slate-100/50">
                   <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest hidden sm:inline">Supervisor</span>
@@ -637,7 +591,7 @@ export const AppraisalForm: React.FC = () => {
                    </button>
                 </div>
                
-               <button className="flex items-center gap-1.5 bg-slate-900 text-white px-3 py-1.5 rounded-lg font-black text-[9px] hover:bg-slate-800 transition-all shadow-sm active:scale-95 uppercase tracking-wider">
+               <button className="flex items-center gap-1.5 bg-slate-900 text-white px-4 py-2 rounded-lg font-black text-[11px] hover:bg-slate-800 transition-all shadow-sm active:scale-95 uppercase tracking-wider">
                   <Save size={10} />
                   <span>Save</span>
                </button>
@@ -645,13 +599,12 @@ export const AppraisalForm: React.FC = () => {
           </div>
         </div>
 
-        {/* Progress Bar */}
         <div className="px-1 mb-2">
            <div className="flex justify-between items-center mb-1">
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 Step {activeStep + 1} / {STEPS.length}
               </span>
-              <span className="text-[8px] font-black text-slate-900">
+              <span className="text-[10px] font-black text-slate-900">
                 {Math.round(((activeStep + 1) / STEPS.length) * 100)}%
               </span>
            </div>
@@ -669,7 +622,6 @@ export const AppraisalForm: React.FC = () => {
            </div>
         </div>
 
-        {/* Stepper Cards - Compact Horizontal Style */}
         <div className="relative">
           <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide snap-x snap-mandatory">
             {STEPS.map((step, idx) => (
@@ -694,13 +646,13 @@ export const AppraisalForm: React.FC = () => {
                 </div>
                 <div className="flex flex-col items-start min-w-0">
                   <span className={cn(
-                    "text-[10px] font-black leading-none truncate w-full uppercase tracking-tight",
+                    "text-[11px] font-black leading-none truncate w-full uppercase tracking-tight",
                     idx === activeStep ? "text-white" : "text-slate-600"
                   )}>
                     {step.label.split(': ')[1]}
                   </span>
                   <span className={cn(
-                    "text-[9px] font-black mt-0.5 leading-none",
+                    "text-[10px] font-black mt-0.5 leading-none",
                     idx === activeStep ? "text-primary-300" : "text-slate-400"
                   )}>
                     {idx + 1}/{STEPS.length}
@@ -713,7 +665,6 @@ export const AppraisalForm: React.FC = () => {
       </Card>
 
 
-      {/* Form Area */}
       <Card className="p-0 overflow-hidden min-h-[400px] transition-all mb-20">
          {loading ? (
             <div className="p-12 xl:p-24 space-y-12 animate-pulse">
@@ -751,8 +702,8 @@ export const AppraisalForm: React.FC = () => {
                               <User size={16} />
                            </div>
                            <div>
-                              <h2 className="text-base font-black text-slate-900 tracking-tight uppercase italic">Employee Information</h2>
-                              <p className="text-[10px] text-slate-400 font-medium mt-0.5">Auto-populated from your staff profile — read only.</p>
+                              <h2 className="text-lg font-black text-slate-900 tracking-tight uppercase">Employee Information</h2>
+                              <p className="text-xs text-slate-400 font-medium mt-1">Auto-populated from your staff profile — read only.</p>
                            </div>
                         </div>
                         <span className="text-[9px] font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-lg uppercase tracking-widest">Read Only</span>
@@ -767,18 +718,17 @@ export const AppraisalForm: React.FC = () => {
                            { label: 'Designation', value: employeeInfo.designation, icon: <Briefcase size={14} /> },
                            { label: 'Department ID', value: employeeInfo.department, icon: <MapPin size={14} /> },
                         ].map((item) => (
-                           <div key={item.label} className="space-y-1">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.12em] flex items-center gap-1.5">
+                           <div key={item.label} className="space-y-1.5">
+                              <label className="text-xs font-black text-slate-400 uppercase tracking-[0.12em] flex items-center gap-1.5">
                                  {item.icon} {item.label}
                               </label>
                               <div className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 uppercase tracking-tight">
-                                 {item.value || <span className="text-slate-300 italic normal-case font-normal">Not set</span>}
+                                 {item.value || <span className="text-slate-300 normal-case font-normal">Not set</span>}
                               </div>
                            </div>
                         ))}
-                        {/* Period selector — Gap 4 fix */}
-                        <div className="md:col-span-2 space-y-1">
-                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.12em] flex items-center gap-1.5">
+                        <div className="md:col-span-2 space-y-1.5">
+                           <label className="text-xs font-black text-slate-400 uppercase tracking-[0.12em] flex items-center gap-1.5">
                               <Calendar size={14} /> Appraisal Period
                            </label>
                            <select
@@ -815,7 +765,7 @@ export const AppraisalForm: React.FC = () => {
                               <Users size={16} />
                            </div>
                            <div>
-                              <h2 className="text-base font-black text-slate-900 tracking-tight uppercase italic">Supervisor Information</h2>
+                              <h2 className="text-base font-black text-slate-900 tracking-tight uppercase">Supervisor Information</h2>
                               <p className="text-[10px] text-slate-400 font-medium mt-0.5">Resolved from your org hierarchy — read only.</p>
                            </div>
                         </div>
@@ -830,7 +780,7 @@ export const AppraisalForm: React.FC = () => {
                            <div key={item.label} className="space-y-1">
                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.12em]">{item.label}</label>
                               <div className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 uppercase tracking-tight">
-                                 {item.value || <span className="text-slate-300 italic normal-case font-normal">Not assigned</span>}
+                                 {item.value || <span className="text-slate-300 normal-case font-normal">Not assigned</span>}
                               </div>
                            </div>
                         ))}
@@ -855,7 +805,7 @@ export const AppraisalForm: React.FC = () => {
                               <UserCheck size={16} />
                            </div>
                            <div>
-                              <h2 className="text-base font-black text-slate-900 tracking-tight uppercase italic">Counter-Signing Officer</h2>
+                              <h2 className="text-base font-black text-slate-900 tracking-tight uppercase">Counter-Signing Officer</h2>
                               <p className="text-[10px] text-slate-400 font-medium mt-0.5">Resolved from your org hierarchy — read only.</p>
                            </div>
                         </div>
@@ -870,7 +820,7 @@ export const AppraisalForm: React.FC = () => {
                            <div key={item.label} className="space-y-1">
                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.12em]">{item.label}</label>
                               <div className="w-full bg-indigo-50/50 border border-indigo-100 rounded-xl px-4 py-2.5 text-sm font-semibold text-indigo-900 uppercase tracking-tight">
-                                 {item.value || <span className="text-slate-300 italic normal-case font-normal">Not assigned</span>}
+                                 {item.value || <span className="text-slate-300 normal-case font-normal">Not assigned</span>}
                               </div>
                            </div>
                         ))}
@@ -889,52 +839,9 @@ export const AppraisalForm: React.FC = () => {
                >
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-900 text-white p-4 rounded-2xl relative overflow-hidden">
                      <div className="relative z-10">
-                        <h2 className="text-sm font-black tracking-tight uppercase italic">Section 4: Task Performance</h2>
+                        <h2 className="text-sm font-black tracking-tight uppercase">Section 4: Task Performance</h2>
                         <p className="text-slate-400 text-[10px] mt-0.5">Report progress against Key Result Areas and KPIs.</p>
                      </div>
-                     {/* Grade legend — shown once here, not repeated per KPI */}
-                     <div className="relative z-10 flex items-center gap-1.5">
-                        {[
-                          { g: 'O', label: 'Outstanding', color: 'bg-green-500' },
-                          { g: 'E', label: 'Excellent', color: 'bg-blue-500' },
-                          { g: 'VG', label: 'Very Good', color: 'bg-violet-500' },
-                          { g: 'G', label: 'Good', color: 'bg-amber-500' },
-                          { g: 'F', label: 'Fair', color: 'bg-orange-500' },
-                          { g: 'P', label: 'Poor', color: 'bg-red-500' },
-                        ].map(({ g, label, color }) => (
-                          <div key={g} title={label} className="flex items-center gap-1 px-1.5 py-0.5 bg-white/10 rounded-md">
-                            <div className={cn("w-1.5 h-1.5 rounded-full", color)} />
-                            <span className="text-[9px] font-black text-white/80 uppercase tracking-wide">{g}</span>
-                          </div>
-                        ))}
-                     </div>
-                      <div className="flex items-center gap-6 relative z-10">
-                        {(() => {
-                           let sum = 0;
-                           activeTemplate.kras.forEach(kra => {
-                              kra.objectives.forEach(obj => {
-                                 obj.kpis.forEach(kpi => {
-                                    sum += currentScores.kpi.items[kpi.id]?.weighted || 0;
-                                 });
-                              });
-                           });
-                           return (
-                              <>
-                                 <div className="text-right">
-                                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Raw Total (100%)</p>
-                                     <p className="text-lg font-black text-white">{sum.toFixed(2)}</p>
-                                 </div>
-                                 <div className="text-right">
-                                     <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-0.5">Institutional (70%)</p>
-                                     <p className="text-2xl font-black text-indigo-400">{currentScores.kpi.total.toFixed(2)}%</p>
-                                 </div>
-                              </>
-                           );
-                        })()}
-                        <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
-                           <Target size={20} />
-                        </div>
-                      </div>
                      <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/10 rounded-full blur-2xl -mr-16 -mt-16" />
                   </div>
 
@@ -945,100 +852,42 @@ export const AppraisalForm: React.FC = () => {
                               <div className="w-12 h-7 bg-slate-900 rounded-lg flex items-center justify-center text-white font-mono text-xs uppercase font-black">
                                  KRA {kra.serialNo}
                               </div>
-                              <h3 className="text-sm font-black text-slate-900 uppercase italic tracking-tight">{kra.name}</h3>
+                              <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">{kra.name}</h3>
                            </div>
-                           <span className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-500">
-                              KRA Weight: 
-                              <input 
-                                 type="number"
-                                 value={kriWeights[kra.id] || 0}
-                                 onChange={(e) => handleKriWeightChange(kra.id, e.target.value)}
-                                 disabled={!isAdmin}
-                                 className={cn("w-10 bg-transparent text-center outline-none border-b border-dashed ml-1", isAdmin ? "border-indigo-300 text-indigo-600" : "border-transparent")}
-                              />
-                           </span>
                         </div>
-
-                        {kra.objectives.map((obj) => (
-                           <div key={obj.id} className="ml-0 sm:ml-6 pl-4 border-l-2 border-slate-100 space-y-3">
-                              <div className="flex flex-col lg:flex-row justify-between items-start gap-2">
-                                 <div className="flex-1">
-                                    <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest mb-1 block">Objective</span>
-                                    <p className="text-xs font-semibold text-slate-700 leading-relaxed italic">"{obj.description}"</p>
-                                 </div>
-                                 <div className="flex gap-2 flex-shrink-0">
-                                    <div className="px-2 py-1 bg-slate-50 rounded-lg text-[9px] font-bold text-slate-400">
-                                       Wt: <input type="number" value={kriWeights[obj.id] || 0} onChange={(e) => handleKriWeightChange(obj.id, e.target.value)} disabled={!isAdmin} className={cn("w-8 bg-transparent text-center outline-none border-b border-dashed", isAdmin ? "border-indigo-300 text-indigo-600" : "border-transparent")} />
-                                    </div>
-                                    <div className="px-2 py-1 bg-indigo-50 rounded-lg text-[9px] font-bold text-indigo-500">
-                                       Obj. Graded Sum: {(() => { 
-                                          let sum = 0;
-                                          obj.kpis.forEach(kpi => sum += currentScores.kpi.items[kpi.id]?.gradedWeight || 0);
-                                          return sum.toFixed(2);
-                                       })()}
-                                    </div>
-                                 </div>
-                              </div>
-
-                              <div className="space-y-2">
-                                 {obj.kpis.map((kpi) => {
-                                    const config = kpiConfigs[kpi.id];
-                                    const currentScore = currentScores.kpi.items[kpi.id];
-                                    return (
-                                       <div key={kpi.id} className="bg-white border border-slate-100 rounded-xl p-4 hover:border-indigo-100 transition-all">
-                                          <div className="flex flex-col xl:flex-row gap-4">
-                                             <div className="flex-1 space-y-3">
-                                                <div className="flex items-start gap-2">
-                                                   <div className="mt-1 w-6 h-4 rounded bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                                                      <span className="text-[8px] font-black text-indigo-600 uppercase tracking-tighter">KPI</span>
-                                                   </div>
-                                                   <p className="text-xs font-semibold text-slate-900 leading-normal">{kpi.description}</p>
-                                                </div>
-                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                                   <div className="space-y-1">
-                                                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Target</p>
-                                                      <div className="flex items-center gap-1">
-                                                         <input type="number" value={config.target} onChange={(e) => handleKpiConfigChange(kpi.id, 'target', e.target.value)} disabled={!isAdmin} className={cn("w-12 bg-transparent border-b border-dashed text-sm font-black outline-none", isAdmin ? "border-indigo-300 text-indigo-700" : "border-transparent text-slate-700 cursor-not-allowed")} />
-                                                         <input type="text" value={config.unit} onChange={(e) => handleKpiConfigChange(kpi.id, 'unit', e.target.value)} disabled={!isAdmin} className={cn("w-10 bg-transparent border-b border-dashed text-[10px] outline-none", isAdmin ? "border-indigo-300 text-indigo-400" : "border-transparent text-slate-400 cursor-not-allowed")} />
-                                                      </div>
-                                                   </div>
-                                                   <div className="sm:col-span-2 space-y-1">
-                                                      <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest">Actual Achievement</p>
-                                                      <input type="number" value={(isSupervisorView ? supervisorAchievements[kpi.id] : achievements[kpi.id]) || ''} onChange={(e) => handleAchievementChange(kpi.id, e.target.value)} placeholder="Enter value..." className="w-full bg-indigo-50/50 border border-indigo-100 rounded-lg px-3 py-2 text-sm font-black text-indigo-700 outline-none focus:border-indigo-400 focus:bg-white transition-all" />
-                                                   </div>
-                                                </div>
-                                             </div>
-
-                                             <div className="xl:w-px xl:h-auto h-px w-full bg-slate-100" />
-
-                                             <div className="flex items-center gap-4 px-2">
-                                                <div className="text-center">
-                                                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Graded Wt.</p>
-                                                   <p className="text-sm font-black text-slate-500">{currentScore?.gradedWeight.toFixed(2) || '0.00'}</p>
-                                                </div>
-                                                <div className="text-center">
-                                                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Grade</p>
-                                                   <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm border", currentScore?.grade === 'O' ? "bg-green-50 text-green-600 border-green-200" : currentScore?.grade === 'P' ? "bg-red-50 text-red-600 border-red-200" : "bg-indigo-50 text-indigo-600 border-indigo-200")}>
-                                                      {currentScore?.grade || '—'}
-                                                   </div>
-                                                </div>
-                                                <div className="text-center">
-                                                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Raw Score</p>
-                                                   <p className="text-lg font-black text-slate-900">{currentScore?.raw || '0'}</p>
-                                                </div>
-                                                <div className="text-center">
-                                                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Weighted Raw Score</p>
-                                                   <p className="text-lg font-black text-indigo-600">{currentScore?.weighted.toFixed(2) || '0.00'}</p>
-                                                </div>
-                                             </div>
-                                          </div>
-
-                                       </div>
-                                    );
-                                 })}
-                              </div>
-                           </div>
-                        ))}
+                        <div className="w-full overflow-x-auto">
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="border-b border-slate-200">
+                                        <th className="p-2 text-left">Description</th>
+                                        <th className="p-2 w-24">Achievement</th>
+                                        <th className="p-2 w-20">Raw</th>
+                                        <th className="p-2 w-24">Weighted Raw</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {kra.objectives.flatMap(obj => obj.kpis).map(kpi => (
+                                        <tr key={kpi.id} className="border-b border-slate-100">
+                                            <td className="p-3">{kpi.description}</td>
+                                            <td className="p-3 align-middle border-r border-slate-100 bg-slate-50/50">
+                                                <input 
+                                                    type="number"
+                                                    value={achievements[kpi.id] || ''}
+                                                    onChange={(e) => handleAchievementChange(kpi.id, e.target.value)}
+                                                    className="w-full h-8 bg-white border border-slate-200 rounded px-2"
+                                                />
+                                            </td>
+                                            <td className="p-3 text-center border-r border-slate-100 align-middle">
+                                                {calculateRawScore(achievements[kpi.id] || 0, { o: 100, e: 80, vg: 75, g: 60, f: 50, p: 40 })}
+                                            </td>
+                                            <td className="p-3 text-center align-middle bg-indigo-50/30">
+                                                {calculateWeightedRawScore((kpi as any).weight || 10, calculateRawScore(achievements[kpi.id] || 0, { o: 100, e: 80, vg: 75, g: 60, f: 50, p: 40 })).toFixed(2)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                      </div>
                   ))}
                </motion.div>
@@ -1056,7 +905,7 @@ export const AppraisalForm: React.FC = () => {
                      <div className="relative z-10 flex items-center gap-3">
                         <Brain size={20} className="text-indigo-400" />
                         <div>
-                           <h3 className="text-sm font-black uppercase italic tracking-tight">Section 5: Competencies</h3>
+                           <h3 className="text-sm font-black uppercase tracking-tight">Section 5: Competencies</h3>
                            <p className="text-indigo-300 text-[10px] mt-0.5">Assessed through observed behaviors and professional values.</p>
                         </div>
                      </div>
@@ -1065,7 +914,6 @@ export const AppraisalForm: React.FC = () => {
                         <span className="text-2xl font-black text-white">{currentScores.competency.toFixed(2)}<span className="text-sm text-indigo-400 ml-0.5">%</span></span>
                      </div>
                   </div>
-
                   <div className="space-y-6">
                      {competencyData.map((cluster) => (
                         <div key={cluster.cluster} className="space-y-3">
@@ -1074,25 +922,10 @@ export const AppraisalForm: React.FC = () => {
                               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">{cluster.cluster}</h3>
                               <div className="h-px flex-1 bg-slate-100" />
                            </div>
-
                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                               {cluster.items.map((item) => (
                                  <div key={item.name} className="bg-white p-4 rounded-xl border border-slate-100 hover:border-indigo-100 transition-all flex flex-col justify-between gap-3">
-                                    <div className="flex justify-between items-start">
-                                       <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight leading-tight flex-1 pr-2">{item.name}</h4>
-                                       <div className="text-right flex-shrink-0">
-                                          <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Wt</div>
-                                          <input type="number" value={compWeights[item.name] || 0} onChange={(e) => handleWeightChange(item.name, e.target.value)} disabled={!isAdmin} className={cn("w-8 bg-transparent border-b border-dashed text-right text-xs font-bold outline-none", isAdmin ? "border-indigo-300 text-indigo-600" : "border-transparent text-slate-400 cursor-not-allowed")} />
-                                       </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                       <div className="flex justify-between text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                                          <span>Target</span><span>{item.target}/5</span>
-                                       </div>
-                                       <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-                                          <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${(item.target / 5) * 100}%` }} />
-                                       </div>
-                                    </div>
+                                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight leading-tight">{item.name}</h4>
                                     <div className="flex gap-1">
                                        {[1, 2, 3, 4, 5].map((s) => (
                                           <button key={s} onClick={() => handleAchievementChange(`comp_${item.name}`, s.toString())}
@@ -1119,32 +952,10 @@ export const AppraisalForm: React.FC = () => {
                    transition={{ duration: 0.4 }}
                    className="p-4 lg:p-6 space-y-4"
                 >
-                   <div className="flex items-center justify-between p-4 bg-amber-50 border border-amber-100 rounded-xl">
-                      <div className="flex items-center gap-3">
-                         <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600"><Zap size={16} /></div>
-                         <div>
-                            <h3 className="text-sm font-black text-slate-900 italic uppercase tracking-tight">Section 6: Operations & Processes</h3>
-                            <p className="text-[10px] text-slate-500 mt-0.5">Rating adherence to organizational standards.</p>
-                         </div>
-                      </div>
-                      <div className="text-right">
-                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Score</p>
-                         <p className="text-xl font-black text-amber-600">{currentScores.ops.score.toFixed(2)}%</p>
-                      </div>
-                   </div>
-
                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {DEFAULT_OPERATIONS_ITEMS.map((item) => (
                          <div key={item.name} className="bg-white p-4 rounded-xl border border-slate-100 hover:border-indigo-100 transition-all">
-                            <div className="flex items-start justify-between gap-3 mb-3">
-                               <div className="flex items-center gap-2">
-                                  <div className="text-indigo-500 flex-shrink-0"><Zap size={14} /></div>
-                                  <div>
-                                     <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight">{item.name}</h4>
-                                     <p className="text-[9px] text-slate-400 mt-0.5">Max Target: {item.target}</p>
-                                  </div>
-                               </div>
-                            </div>
+                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight mb-3">{item.name}</h4>
                             <div className="flex gap-1">
                                {Array.from({ length: item.max + 1 }).map((_, s) => (
                                   <button key={s} onClick={() => handleAchievementChange(`op_${item.name}`, s.toString())}
@@ -1167,62 +978,16 @@ export const AppraisalForm: React.FC = () => {
                   exit={{ opacity: 0, x: -20 }}
                   className="p-4 lg:p-6 space-y-4"
                >
-                  <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
-                     <div className="w-8 h-8 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600"><MessageSquare size={16} /></div>
-                     <div>
-                        <h2 className="text-sm font-black text-slate-900 uppercase italic tracking-tight">Section 7: Appraisee Comments</h2>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Add your personal reflections on your performance this period, then sign digitally.</p>
-                     </div>
-                  </div>
-
-                  <div className="space-y-4">
-                     {/* Appraisee comment — editable */}
-                     <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                           <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                           Your Performance Reflections
-                        </label>
-                        <textarea 
-                           placeholder="Briefly describe your key achievements, challenges faced, and areas you intend to improve..."
-                           value={comments.appraiseeComments}
-                           onChange={(e) => handleCommentChange('appraiseeComments', e.target.value)}
-                           className="w-full h-32 bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-slate-900/5 outline-none transition-all placeholder:text-slate-300 resize-none"
-                        />
-                        <div className="flex items-center justify-between">
-                           <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest italic">
-                              This comment will be visible to your supervisor and counter-signing officer.
-                           </p>
-                           <label className="flex items-center gap-2 cursor-pointer group">
-                              <span className="text-[10px] font-bold text-slate-400 group-hover:text-slate-900 transition-colors uppercase tracking-widest">Sign Digitally</span>
-                              <input type="checkbox" checked={comments.appraiseeSigned} onChange={(e) => handleCommentChange('appraiseeSigned', e.target.checked)} className="w-4 h-4 rounded border-2 border-slate-200 text-slate-900 focus:ring-slate-900" />
-                           </label>
-                        </div>
-                     </div>
-
-                     {/* Supervisor & counter-signer — locked, read-only info */}
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-100">
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                              <Users size={12} className="text-slate-300" />
-                              Supervisor Comment
-                              <span className="ml-auto text-[8px] bg-amber-50 text-amber-600 border border-amber-100 px-1.5 py-0.5 rounded font-black uppercase tracking-widest">Pending</span>
-                           </label>
-                           <div className="h-20 bg-slate-50 border border-dashed border-slate-200 rounded-xl p-4 flex items-center justify-center">
-                              <p className="text-[10px] font-bold text-slate-300 italic text-center">Filled by your supervisor after review</p>
-                           </div>
-                        </div>
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                              <UserCheck size={12} className="text-slate-300" />
-                              Counter-Signing Officer
-                              <span className="ml-auto text-[8px] bg-amber-50 text-amber-600 border border-amber-100 px-1.5 py-0.5 rounded font-black uppercase tracking-widest">Pending</span>
-                           </label>
-                           <div className="h-20 bg-slate-50 border border-dashed border-slate-200 rounded-xl p-4 flex items-center justify-center">
-                              <p className="text-[10px] font-bold text-slate-300 italic text-center">Filled by the counter-signing officer</p>
-                           </div>
-                        </div>
-                     </div>
-                  </div>
+                  <textarea 
+                     placeholder="Add comments..."
+                     value={comments.appraiseeComments}
+                     onChange={(e) => handleCommentChange('appraiseeComments', e.target.value)}
+                     className="w-full h-32 p-4 rounded-xl border border-slate-200"
+                  />
+                  <label className="flex items-center gap-2">
+                     <input type="checkbox" checked={comments.appraiseeSigned} onChange={(e) => handleCommentChange('appraiseeSigned', e.target.checked)} />
+                     Sign Digitally
+                  </label>
                </motion.div>
             )}
 
@@ -1237,7 +1002,7 @@ export const AppraisalForm: React.FC = () => {
                   <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
                      <div className="w-8 h-8 bg-green-50 text-green-600 rounded-xl flex items-center justify-center"><CheckCircle2 size={16} /></div>
                      <div>
-                        <h2 className="text-sm font-black text-slate-900 uppercase italic tracking-tight">Review & Submit</h2>
+                        <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight">Review & Submit</h2>
                         <p className="text-[10px] text-slate-400 mt-0.5">Review your performance summary before final submission.</p>
                      </div>
                   </div>
@@ -1246,187 +1011,48 @@ export const AppraisalForm: React.FC = () => {
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                         <div className="space-y-3">
                            {[
-                              { label: 'Section 4: Tasks (70%)', value: currentScores.kpi.total.toFixed(2) },
+                              { label: 'Section 4: Tasks (70%)', value: (currentScores.kpi.total * 0.7).toFixed(2) },
                               { label: 'Section 5: Competencies (20%)', value: currentScores.competency.toFixed(2) },
                               { label: 'Section 6: Operations (10%)', value: currentScores.ops.score.toFixed(2) },
                            ].map((row) => (
                               <div key={row.label} className="flex justify-between items-center py-2 border-b border-white/10">
                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{row.label}</span>
-                                 <span className="text-base font-black text-indigo-400">{row.value}%</span>
+                                 <span className="text-base font-black text-indigo-400">{row.value} Pts</span>
                               </div>
                            ))}
                         </div>
-                        <div className="bg-white/5 rounded-xl p-6 flex flex-col items-center justify-center gap-2 text-center border border-white/10">
-                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Aggregate Score</p>
+                        <div className="bg-white/5 rounded-xl p-4 flex flex-col items-center justify-center gap-1 text-center border border-white/10">
+                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">Appraisal Rate</p>
                            <div className="flex items-baseline gap-1">
-                              <span className="text-5xl font-black tracking-tighter text-white">{currentScores.grandTotal.toFixed(2)}</span>
-                              <span className="text-lg font-bold text-indigo-400">%</span>
-                           </div>
-                           <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-green-500/30">
-                              {currentScores.grandTotal >= 100 ? 'Outstanding' : currentScores.grandTotal >= 90 ? 'Excellent' : 'Good'}
-                           </span>
-                        </div>
-                     </div>
-                     <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-600/10 rounded-full blur-3xl -mr-24 -mt-24" />
-                  </div>
-
-                  <div className="flex items-center gap-3 text-amber-600 bg-amber-50 p-4 rounded-xl border border-amber-100">
-                     <AlertCircle size={16} className="flex-shrink-0" />
-                     <p className="text-xs font-bold leading-relaxed">By submitting, you finalize your Q2 2026 appraisal. This record will be immutable once supervisor review begins.</p>
-                  </div>
-
-                  {/* Signature block — required before submission per PDA Section 7 */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
-                     {/* Header */}
-                     <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Appraisee Declaration & Signature</p>
-                        <p className="text-[9px] text-slate-400 font-bold">Section 7 — Required</p>
-                     </div>
-
-                     <div className="p-4 space-y-4">
-                        {/* Declaration text */}
-                        <p className="text-[11px] text-slate-600 leading-relaxed font-medium italic border-l-2 border-slate-200 pl-3">
-                           "I hereby certify that the information provided in this appraisal is true and accurate to the best of my knowledge, and that I have reviewed all sections before submission."
-                        </p>
-
-                        {/* Signature row */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-100">
-                           {/* Name */}
-                           <div className="space-y-1">
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Full Name</p>
-                              <div className="h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 flex items-center">
-                                 <p className="text-xs font-black text-slate-700 uppercase italic tracking-tight">{employeeInfo.name}</p>
-                              </div>
-                           </div>
-                           {/* IPPIS */}
-                           <div className="space-y-1">
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">IPPIS No.</p>
-                              <div className="h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 flex items-center">
-                                 <p className="text-xs font-black text-slate-700 font-mono">{employeeInfo.ippisNo}</p>
-                              </div>
-                           </div>
-                           {/* Date */}
-                           <div className="space-y-1">
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Date</p>
-                              <div className="h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 flex items-center">
-                                 <p className="text-xs font-black text-slate-700">{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
-                              </div>
+                              <span className="text-3xl font-black tracking-tighter text-white">{(currentScores.kpi.total * 0.7 + currentScores.competency + currentScores.ops.score).toFixed(2)}</span>
+                              <span className="text-xs font-bold text-indigo-400">/ 100</span>
                            </div>
                         </div>
-
-                        {/* ── Signature image upload ── */}
-                        <div className="space-y-2 pt-2 border-t border-slate-100">
-                           <div className="flex items-center justify-between">
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                 Handwritten Signature Image
-                                 {sigDataUrl && <span className="ml-2 text-green-600">✓ On file</span>}
-                              </p>
-                              {sigDataUrl && (
-                                 <button
-                                    onClick={clearSig}
-                                    className="flex items-center gap-1 text-[9px] font-black text-red-400 hover:text-red-600 uppercase tracking-widest transition-colors"
-                                 >
-                                    <TrashIcon size={10} /> Remove
-                                 </button>
-                              )}
-                           </div>
-
-                           {sigDataUrl ? (
-                              /* Signature preview */
-                              <div className="relative h-20 bg-white border border-slate-200 rounded-xl overflow-hidden flex items-center justify-center group">
-                                 <img
-                                    src={sigDataUrl}
-                                    alt="Your signature"
-                                    className="max-h-16 max-w-full object-contain"
-                                 />
-                                 <button
-                                    onClick={() => sigInputRef.current?.click()}
-                                    className="absolute inset-0 bg-white/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-[10px] font-black text-slate-600 uppercase tracking-widest"
-                                 >
-                                    <Upload size={14} /> Replace
-                                 </button>
-                              </div>
-                           ) : (
-                              /* Drop zone */
-                              <div
-                                 onClick={() => sigInputRef.current?.click()}
-                                 onDragOver={(e) => { e.preventDefault(); setSigDragOver(true); }}
-                                 onDragLeave={() => setSigDragOver(false)}
-                                 onDrop={(e) => {
-                                    e.preventDefault();
-                                    setSigDragOver(false);
-                                    const file = e.dataTransfer.files[0];
-                                    if (file) processSigFile(file);
-                                 }}
-                                 className={cn(
-                                    "h-20 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all",
-                                    sigDragOver
-                                       ? "border-primary-400 bg-primary-50"
-                                       : "border-slate-200 hover:border-primary-300 hover:bg-slate-50"
-                                 )}
-                              >
-                                 <ImageIcon size={20} className="text-slate-300" />
-                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                    {sigDragOver ? 'Drop to upload' : 'Upload signature image'}
-                                 </p>
-                                 <p className="text-[9px] text-slate-300 font-bold">PNG, JPG — saved once, reused forever</p>
-                              </div>
-                           )}
-
-                           {/* Hidden file input */}
-                           <input
-                              ref={sigInputRef}
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                 const file = e.target.files?.[0];
-                                 if (file) processSigFile(file);
-                                 e.target.value = '';
-                              }}
-                           />
-                        </div>
-
-                        {/* Confirmation checkbox */}
-                        {comments.appraiseeSigned ? (
-                           <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-xl">
-                              <div className="flex items-center gap-2">
-                                 <CheckCircle2 size={16} className="text-green-600 flex-shrink-0" />
-                                 <div>
-                                    <p className="text-xs font-black text-green-700 uppercase tracking-widest">Signed & Confirmed</p>
-                                    <p className="text-[9px] text-green-600 font-bold mt-0.5">This appraisal has been digitally acknowledged by the appraisee.</p>
-                                 </div>
-                              </div>
-                              {/* Show uploaded sig or initials fallback */}
-                              <div className="flex-shrink-0 ml-4 text-right">
-                                 {sigDataUrl ? (
-                                    <img src={sigDataUrl} alt="signature" className="h-10 max-w-[120px] object-contain border-b-2 border-green-400" />
-                                 ) : (
-                                    <p className="font-mono text-xl font-black italic text-green-700 border-b-2 border-green-400 pb-0.5 tracking-widest">
-                                       {employeeInfo.name.split(' ').map(n => n[0]).join('.')}
-                                    </p>
-                                 )}
-                                 <p className="text-[8px] text-green-500 font-bold uppercase tracking-widest mt-0.5">Digital Signature</p>
-                              </div>
-                           </div>
-                        ) : (
-                           <label className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl cursor-pointer group hover:bg-amber-100 transition-colors">
-                              <input
-                                 type="checkbox"
-                                 checked={comments.appraiseeSigned}
-                                 onChange={(e) => handleCommentChange('appraiseeSigned', e.target.checked)}
-                                 className="w-5 h-5 mt-0.5 rounded border-2 border-amber-400 text-primary-950 focus:ring-primary-950 cursor-pointer flex-shrink-0"
-                              />
-                              <div>
-                                 <p className="text-xs font-black text-amber-800 uppercase tracking-widest">I confirm and sign this appraisal</p>
-                                 <p className="text-[9px] text-amber-600 font-bold mt-0.5 leading-relaxed">
-                                    By ticking this box, you are digitally signing this document. This is equivalent to a handwritten signature and is required before submission.
-                                 </p>
-                              </div>
-                           </label>
-                        )}
                      </div>
                   </div>
+
+                  <div className="bg-red-50 border border-red-100 rounded-xl p-6 space-y-4">
+                      <div className="flex items-center gap-3">
+                         <div className="w-8 h-8 bg-red-100 text-red-600 rounded-lg flex items-center justify-center">
+                            <Activity size={16} />
+                         </div>
+                         <div>
+                            <h3 className="text-xs font-black text-red-900 uppercase tracking-tight">Appraisal Appeal (Optional)</h3>
+                            <p className="text-[9px] text-red-600 font-bold uppercase tracking-widest mt-0.5">Lodge an appeal if you disagree with the preliminary assessment.</p>
+                         </div>
+                      </div>
+                      <div className="space-y-3">
+                         <p className="text-[10px] text-red-800 leading-relaxed italic">
+                            "If you believe your supervisor's scores do not accurately reflect your performance, you may lodge a formal appeal here. This will be reviewed by the Counter-Signing Officer."
+                         </p>
+                         <textarea 
+                            placeholder="State your grounds for appeal here (optional)..."
+                            className="w-full h-24 bg-white border border-red-200 rounded-lg p-3 text-[11px] font-semibold focus:ring-4 focus:ring-red-500/5 outline-none transition-all placeholder:text-red-200"
+                            value={comments.staffAppeal || ''}
+                            onChange={(e) => handleCommentChange('staffAppeal', e.target.value)}
+                         />
+                      </div>
+                   </div>
                </motion.div>
             )}
           </AnimatePresence>

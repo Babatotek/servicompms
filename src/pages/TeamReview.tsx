@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Users, CheckCircle2, XCircle, Clock, MessageSquare,
@@ -15,9 +15,16 @@ import { useNotifications } from '../context/NotificationContext';
 
 export const TeamReview: React.FC = () => {
   const { user } = useAuth();
-  const { getAppraisalsForSupervisor, getAppraisalsForCounterSigner, updateAppraisalStatus, counterSignAppraisal, returnFromCounterSigner } = useAppraisals();
-  const { getContractsForSupervisor, approveContract, returnContract } = useContracts();
+  const { getAppraisalsForSupervisor, getAppraisalsForCounterSigner, updateAppraisalStatus, counterSignAppraisal, returnFromCounterSigner, loadSupervisorQueue, loadCounterQueue } = useAppraisals();
+  const { getContractsForSupervisor, approveContract, returnContract, loadContractsForSupervisor } = useContracts();
   const { addNotification, notifyUser } = useNotifications();
+
+  // Load queues from API on mount
+  useEffect(() => {
+    loadSupervisorQueue();
+    loadCounterQueue();
+    loadContractsForSupervisor();
+  }, []);
 
   const [selectedAppraisal, setSelectedAppraisal] = useState<any>(null);
   const [selectedContract, setSelectedContract] = useState<ContractRecord | null>(null);

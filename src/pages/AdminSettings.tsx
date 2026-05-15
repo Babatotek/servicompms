@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Settings, Percent, BarChart3, Calendar, Award, Copy, Plus, Trash2, Save,
   CheckCircle2, ChevronRight, Database, Layout, Users, Search, Filter,
@@ -11,8 +11,10 @@ import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
 import { useOrg } from '../context/OrgContext';
 import { DepartmentModal } from '../components/admin/DepartmentModal';
+import { StaffModal } from '../components/admin/StaffModal';
 import { TemplateBuilder } from '../components/admin/TemplateBuilder';
 import { PerformanceTemplate } from '../lib/performanceTemplates';
+import { adminApi } from '../lib/api';
 import { 
   DEFAULT_GRADE_SCALE, 
   DEFAULT_COMPETENCIES,
@@ -20,48 +22,6 @@ import {
   SECTION_WEIGHTS, 
   APPRAISAL_PERIOD_DEFAULTS as DEFAULT_PERIODS 
 } from '../constants';
-
-const MOCK_USERS = [
-  // NC
-  { id: '1',  name: 'Oladimeji Funmilayo',  email: 'o.funmilayo@servicom.gov.ng',  role: UserRole.NC,          dept: 'National Coordinator', status: 'Active' },
-  // PA
-  { id: '2',  name: 'Ututah Emmanuel',       email: 'u.emmanuel@servicom.gov.ng',   role: UserRole.STAFF,       dept: 'Public Awareness',     status: 'Active' },
-  // ACCOUNT
-  { id: '3',  name: 'Odumu Godwin',          email: 'o.godwin@servicom.gov.ng',     role: UserRole.DEPT_HEAD,   dept: 'Accounts & Finance',   status: 'Active' },
-  { id: '4',  name: 'Oladimeji Funmilayo',   email: 'ol.funmilayo@servicom.gov.ng', role: UserRole.STAFF,       dept: 'Accounts & Finance',   status: 'Active' },
-  { id: '5',  name: 'Omego Hilary',          email: 'o.hilary@servicom.gov.ng',     role: UserRole.STAFF,       dept: 'Accounts & Finance',   status: 'Active' },
-  // ADMIN
-  { id: '6',  name: 'Nawabua Chinyere',      email: 'n.chinyere@servicom.gov.ng',   role: UserRole.DEPT_HEAD,   dept: 'Admin & HR',           status: 'Active' },
-  { id: '7',  name: 'Abdullahi Isah',        email: 'a.isah@servicom.gov.ng',       role: UserRole.STAFF,       dept: 'Admin & HR',           status: 'Active' },
-  { id: '8',  name: 'Amos Obinna',           email: 'a.obinna@servicom.gov.ng',     role: UserRole.STAFF,       dept: 'Admin & HR',           status: 'Active' },
-  { id: '9',  name: 'Danabuyi Samson',       email: 'd.samson@servicom.gov.ng',     role: UserRole.STAFF,       dept: 'Admin & HR',           status: 'Active' },
-  { id: '10', name: 'Kaura Isaiah',          email: 'k.isaiah@servicom.gov.ng',     role: UserRole.STAFF,       dept: 'Admin & HR',           status: 'Active' },
-  { id: '11', name: 'Mohammed Musa',         email: 'm.musa@servicom.gov.ng',       role: UserRole.STAFF,       dept: 'Admin & HR',           status: 'Active' },
-  { id: '12', name: 'Nwachukwu Thankgod',   email: 'n.thankgod@servicom.gov.ng',   role: UserRole.STAFF,       dept: 'Admin & HR',           status: 'Active' },
-  { id: '13', name: 'Yunusa Gambo',          email: 'y.gambo@servicom.gov.ng',      role: UserRole.STAFF,       dept: 'Admin & HR',           status: 'Inactive' },
-  // AUDIT
-  { id: '14', name: 'Omakwu Peter',          email: 'o.peter@servicom.gov.ng',      role: UserRole.STAFF,       dept: 'Internal Audit',       status: 'Active' },
-  // ICT
-  { id: '15', name: 'ICT Head',              email: 'ict.head@servicom.gov.ng',     role: UserRole.DEPT_HEAD,   dept: 'ICT',                  status: 'Active' },
-  // OPERATIONS
-  { id: '16', name: 'Akinbodewa Ngozi',      email: 'a.ngozi@servicom.gov.ng',      role: UserRole.DEPUTY_DIRECTOR, dept: 'Operations',       status: 'Active' },
-  { id: '17', name: 'Oleh Nneka',            email: 'o.nneka@servicom.gov.ng',      role: UserRole.TEAM_LEAD,   dept: 'Operations — Team A',  status: 'Active' },
-  { id: '18', name: 'Shittu Oyelude',        email: 's.oyelude@servicom.gov.ng',    role: UserRole.STAFF,       dept: 'Operations — Team A',  status: 'Active' },
-  { id: '19', name: 'Onche Ben',             email: 'o.ben@servicom.gov.ng',        role: UserRole.TEAM_LEAD,   dept: 'Operations — Team B',  status: 'Active' },
-  { id: '20', name: 'Sesugh Duruba',         email: 's.duruba@servicom.gov.ng',     role: UserRole.STAFF,       dept: 'Operations — Team B',  status: 'Active' },
-  { id: '21', name: 'Tubi-Tolulope',         email: 't.tolulope@servicom.gov.ng',   role: UserRole.STAFF,       dept: 'Operations — Team B',  status: 'Active' },
-  { id: '22', name: 'Igwilo Esther',         email: 'i.esther@servicom.gov.ng',     role: UserRole.STAFF,       dept: 'Operations — Team C',  status: 'Active' },
-  { id: '23', name: 'Obe Nat',               email: 'o.nat@servicom.gov.ng',        role: UserRole.STAFF,       dept: 'Operations — Team C',  status: 'Active' },
-  { id: '24', name: 'Ochelebe Anthony',      email: 'o.anthony@servicom.gov.ng',    role: UserRole.STAFF,       dept: 'Operations — Team C',  status: 'Active' },
-  { id: '25', name: 'Olaniyan Kikelomo',     email: 'o.kikelomo@servicom.gov.ng',   role: UserRole.STAFF,       dept: 'Operations — Team C',  status: 'Active' },
-  { id: '26', name: 'Magaji Medinatu',       email: 'm.medinatu@servicom.gov.ng',   role: UserRole.STAFF,       dept: 'Operations — Team D',  status: 'Active' },
-  { id: '27', name: 'Nasir Mohammed',        email: 'n.mohammed@servicom.gov.ng',   role: UserRole.STAFF,       dept: 'Operations — Team D',  status: 'Active' },
-  { id: '28', name: 'Nnanna Rose',           email: 'n.rose@servicom.gov.ng',       role: UserRole.STAFF,       dept: 'Operations — Team D',  status: 'Active' },
-  { id: '29', name: 'Zack-Ukoh Lucy',        email: 'z.lucy@servicom.gov.ng',       role: UserRole.STAFF,       dept: 'Operations — Team D',  status: 'Active' },
-];
-
-
-
 
 type Tab = 'users' | 'scoring' | 'periods' | 'competencies' | 'templates' | 'notifications' | 'mpms_library' | 'unit_weights';
 
@@ -96,10 +56,25 @@ export const AdminSettings: React.FC = () => {
   const [userSubTab, setUserSubTab] = useState<'staff' | 'depts'>('staff');
   const [saved, setSaved] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [showDeptModal, setShowDeptModal] = useState(false);
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<any | undefined>(undefined);
   const [showTemplateBuilder, setShowTemplateBuilder] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<PerformanceTemplate | undefined>();
+
+  // Live users from API
+  const [apiUsers, setApiUsers] = useState<any[]>([]);
+
+  const loadUsers = useCallback(() => {
+    setLoading(true);
+    adminApi.users()
+      .then(res => setApiUsers(res?.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { loadUsers(); }, [loadUsers]);
 
   // ── Controlled scoring weights (PRD Gap 3 fix) ───────────────────────────
   const [weights, setWeights] = useState({
@@ -136,16 +111,23 @@ export const AdminSettings: React.FC = () => {
     d.code.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredUsers = MOCK_USERS.filter(u =>
-    u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.dept.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredUsers = apiUsers.filter(u =>
+    `${u.surname} ${u.firstname}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (u.email ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (u.department?.name ?? '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
     <div className="space-y-3 pb-16">
       {/* Modals */}
       {showDeptModal && <DepartmentModal onClose={() => setShowDeptModal(false)} />}
+      {(showStaffModal || editingUser) && (
+        <StaffModal
+          existing={editingUser}
+          allUsers={apiUsers}
+          onClose={() => { setShowStaffModal(false); setEditingUser(undefined); loadUsers(); }}
+        />
+      )}
       {(showTemplateBuilder || editingTemplate) && (
         <TemplateBuilder
           existing={editingTemplate}
@@ -201,7 +183,9 @@ export const AdminSettings: React.FC = () => {
                     className="w-52 bg-slate-50 border border-slate-100 rounded-lg pl-9 pr-3 py-2 text-[11px] font-black uppercase tracking-widest text-slate-900 focus:bg-white focus:border-primary-400 transition-all outline-none" />
                 </div>
                 <button className="p-2 bg-slate-50 border border-slate-100 rounded-lg hover:bg-white transition-all"><Filter size={14} className="text-slate-500" /></button>
-                <button onClick={() => setShowDeptModal(true)} className="flex items-center gap-1.5 bg-primary-950 text-white px-4 py-2 rounded-lg font-black text-[10px] active:scale-95 transition-all shadow-md uppercase tracking-widest">
+                <button
+                  onClick={() => userSubTab === 'staff' ? setShowStaffModal(true) : setShowDeptModal(true)}
+                  className="flex items-center gap-1.5 bg-primary-950 text-white px-4 py-2 rounded-lg font-black text-[10px] active:scale-95 transition-all shadow-md uppercase tracking-widest">
                   <Plus size={13} /><span>Add {userSubTab === 'staff' ? 'Staff' : 'Dept'}</span>
                 </button>
               </div>
@@ -231,10 +215,10 @@ export const AdminSettings: React.FC = () => {
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-lg bg-primary-950 flex items-center justify-center text-white font-mono font-black text-[9px] uppercase italic flex-shrink-0">
-                                {user.name.split(' ').map(n => n[0]).join('')}
+                                {`${user.surname?.[0] ?? ''}${user.firstname?.[0] ?? ''}`}
                               </div>
                               <div className="min-w-0">
-                                <p className="text-xs font-black text-slate-900 uppercase italic tracking-tight leading-none">{user.name}</p>
+                                <p className="text-xs font-black text-slate-900 uppercase italic tracking-tight leading-none">{user.surname} {user.firstname}</p>
                                 <p className="text-[9px] font-black text-slate-400 lowercase tracking-tight mt-0.5 opacity-70 truncate max-w-[160px]">{user.email}</p>
                               </div>
                             </div>
@@ -245,17 +229,24 @@ export const AdminSettings: React.FC = () => {
                             </Badge>
                           </td>
                           <td className="px-4 py-3 min-w-[160px]">
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">{user.dept}</span>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">
+                              {user.department?.name ?? user.department_id}
+                            </span>
                           </td>
                           <td className="px-4 py-3 hidden sm:table-cell">
-                            <Badge variant={user.status === 'Active' ? 'primary' : 'default'} size="sm">
-                              <div className={cn("w-1 h-1 rounded-full mr-1.5", user.status === 'Active' ? "bg-white" : "bg-red-400")} />{user.status}
+                            <Badge variant={user.is_active ? 'primary' : 'default'} size="sm">
+                              <div className={cn("w-1 h-1 rounded-full mr-1.5", user.is_active ? "bg-white" : "bg-red-400")} />
+                              {user.is_active ? 'Active' : 'Inactive'}
                             </Badge>
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
-                              <button className="p-2 bg-white border border-slate-100 rounded-lg text-slate-400 hover:text-primary-600 hover:border-primary-100 transition-all"><Settings size={12} /></button>
-                              <button className="p-2 bg-white border border-slate-100 rounded-lg text-red-300 hover:text-red-600 hover:border-red-100 transition-all"><Trash2 size={12} /></button>
+                              <button
+                                onClick={() => { setEditingUser(user); }}
+                                className="p-2 bg-white border border-slate-100 rounded-lg text-slate-400 hover:text-primary-600 hover:border-primary-100 transition-all"
+                              >
+                                <Settings size={12} />
+                              </button>
                             </div>
                           </td>
                         </tr>
